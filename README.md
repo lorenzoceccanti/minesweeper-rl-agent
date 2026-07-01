@@ -1,2 +1,6 @@
 # minesweeper-rl-agent
-Standard Reinforcement Learning project for the SEAI course, edition 2025/26
+The aim of this project consist in training an agent to play Minesweeper game, in a customized MDP environment and evaluate the performances of various DRL algorithms.
+
+# Contributors
+- Cristiano Corsi
+- Lorenzo Ceccanti
