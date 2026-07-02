@@ -5,3 +5,16 @@
 .DS_Store
 .AppleDouble
 .LSOverride
+
+# Python
+__pycache__/
+*.pyc
+
+# Environments
+.env
+.venv/
+env/
+venv/
+
+# Esclude file creati dall'editor VS Code
+.vscode/
