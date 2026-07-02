@@ -1,0 +1,7 @@
+# Esclude tutti i file generati da macOS che iniziano per ._
+**/._*
+
+# Esclude altri file di sistema macOS comuni
+.DS_Store
+.AppleDouble
+.LSOverride
