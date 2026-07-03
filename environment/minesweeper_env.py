@@ -62,4 +62,10 @@ class MinesweeperEnv(gym.Env):
                 dtype=int
         )
 
-        # TODO: remember to define the reward function
+        # Definition of the rewards
+        # according to Wenbo Wang et. al, 2025
+        self.R.win = self.board_width * self.board_height # win the game
+        self.R.lose = -(self.board_width * self.board_height) # find a mine
+        self.R.progress = 1 # uncovering a safe cell
+        self.R.guess = -0.5 # random guessing: the cell uncovered was safe, but all neighb. cells are undisclosed yet
+        self.R.alreadyOpen = -0.5 # choosing an already revealed cell
