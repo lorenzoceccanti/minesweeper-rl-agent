@@ -69,3 +69,5 @@ class MinesweeperEnv(gym.Env):
         self.R.progress = 1 # uncovering a safe cell
         self.R.guess = -0.5 # random guessing: the cell uncovered was safe, but all neighb. cells are undisclosed yet
         self.R.alreadyOpen = -0.5 # choosing an already revealed cell
+
+        
