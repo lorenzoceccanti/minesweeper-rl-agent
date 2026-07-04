@@ -1,52 +1,59 @@
-import random
-
 class Game:
     def __init__(
             self,
             board_width: int,
             board_height: int,
             num_mines: int,
-            seed: int = None):
+        ):
         
         self.board_width = board_width
         self.board_height = board_height
         self.num_mines = num_mines
-        self.seed = seed
 
-        # As field of the class, we'll have also
-        # a board object, storing the state
-        # of the cells during a game session
-        # in particular, if the cell is unrevealed
-        # or if it's revealed the number of mines around
+        # Come campi della classe abbiamo:
+        # - board che corrisponde alla soluzione "a carte scoperte"
+        # della partita, cosa che l'agent non vede
+        # - player_board, è lo stato della partita "a carte coperte"
+        # cosa che invece l'agent vede
 
+        # la board conterrà:
+        # 0 cella sicura, priva di mine intorno
+        # 1..8 cella sicura, con indicato quante mine intorno ad una cella sicura
+        # -1 mina
         self.board = []
+        # la player board rappresenta l'informazione delle celle non ancora
+        # rivelate con -2
+        self.player_board = []
 
-        self.reset()
 
-    def reset(self):
+    def reset(self, rng):
         """ Resets the game session to a fresh state"""
-        # Setting the seed, if specified
-        if self.seed is not None:
-            random.seed(self.seed)
+    
         # Empyting the board first
         self.board = []
         # At reset, all the cells are unrevealed -> 0
+        self.player_board = []
 
         # Attenzione, height ci da il numero di righe
         # mentre width ci da il numero di colonne
         for _ in range(self.board_height):
             row = []
+            player_row = []
             for _ in range(self.board_width):
                 row.append(0)
+                player_row.append(-2)
             self.board.append(row)
+            self.player_board.append(player_row)
 
         # Placing the mines
-        self.place_mines()
+        self.place_mines(rng)
 
         # Computing the numbers of mines around
         self.compute_mines_around()
+        
+        return self.board, self.player_board
     
-    def place_mines(self):
+    def place_mines(self, rng):
         """" Place mines in the board
         A mine is identified into the board with -1
         """
@@ -55,7 +62,8 @@ class Game:
         # equal to num_mines between 0 and (board_width x board_height) - 
         number_of_cells = self.board_width * self.board_height
         # range generates cell ids between 0 and no_cells - 1
-        generated_mines = random.sample(range(number_of_cells), self.num_mines)
+        # according to a rng strategy
+        generated_mines = rng.choice(number_of_cells, size=self.num_mines, replace=False)
 
         # Place the mines into the board
         # Note: if you have a matrix MxN and ids ranging from 0 to (MXN)-1
@@ -106,5 +114,15 @@ class Game:
         for row in self.board:
             # Priting 'X' for mine (-1) and '.' for empty cells (0)
             rendered_row = [ "X" if cell == -1 else str(cell) for cell in row ]
+            print(" ".join(rendered_row))
+        print("-" * 40)
+    
+    def print_player_board(self):
+        print(f"--- PLAYER Board {self.board_width}x{self.board_height} ({self.num_mines} mines) ---")
+        for row in self.player_board:
+            rendered_row = [
+                "X" if cell == -1 else ("?" if cell == -2 else str(cell)) 
+                for cell in row
+            ]
             print(" ".join(rendered_row))
         print("-" * 40)
