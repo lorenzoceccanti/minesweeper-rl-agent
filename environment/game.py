@@ -108,6 +108,15 @@ class Game:
                                 continue # we obviously don't involve the mine itself in the increment
                             self.increment_neighbors(i + ni, j + nj)
     
+    def is_safe_cell_discovered(self, i, j):
+        """ Returns True if the cell, identified by the coordinates (i,j)
+        is already known not to be a mine. If the cell is to discover yet,
+        the method returns False."""
+        if self.player_board[i][j] >= 0:
+            return True
+        else:
+            return False
+
     def print_board(self):
         """ Utility function to print the board status."""
         print(f"--- Board {self.board_width}x{self.board_height} ({self.num_mines} mines) ---")

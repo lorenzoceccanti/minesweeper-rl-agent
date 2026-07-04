@@ -86,7 +86,8 @@ class MinesweeperEnv(gym.Env):
         self.stats = {
             "n_win": 0,
             "n_lose": 0,
-            "n_episodes": 0
+            "n_episodes": 0,
+            "num_no_progress": 0
         }
 
         self.game = Game(board_width=self.board_width, board_height=self.board_height, num_mines=self.n_mines)
@@ -139,3 +140,29 @@ class MinesweeperEnv(gym.Env):
                 self.board, self.player_board = self.game.reset(self.np_random)
 
             self.first_move = False
+        
+        # If the episode is still going
+        if not self.done:
+            # Here we are differencing the game situations
+            # Situation 1: Agent chooses a cell already revealed safe
+            if self.game.is_safe_cell_discovered(i,j):
+                reward = self.R_alreadyOpen
+                self.done = False
+                self.info["status"] = "no_progress"
+                self.stats["num_no_progress"] += 1
+            else:
+                # TODO
+                # Situation 2: Agent chooses a cell still to reveal
+                pass
+                # Situation 2.a: We have to discriminate if we have
+                # won, if we lose or if we have to continue to play
+
+                # fare un metodo che controlla quante celle
+                # da aprire sono rimaste. Se sono pari al numero
+                # di mine e non ho mai incontrato una mina, ho vinto
+
+                # L'idea, è che, quando clicchi una mina devi anche
+                # controllare il vicinato. se il vicinato è costituito
+                # da tutte celle pulite, scopro le mine libere.
+
+        # return self.player_board, reward, ..
