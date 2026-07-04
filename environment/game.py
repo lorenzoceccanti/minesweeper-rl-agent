@@ -65,8 +65,6 @@ class Game:
         
         for mine_id in generated_mines:
             # converting cell id into a coordinate
-            i = mine_id % self.board_width
-            j = mine_id // self.board_width
             i = mine_id // self.board_width
             j = mine_id % self.board_width
 
