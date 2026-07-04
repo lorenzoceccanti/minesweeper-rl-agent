@@ -163,6 +163,6 @@ class MinesweeperEnv(gym.Env):
 
                 # L'idea, è che, quando clicchi una cella sicura con 0 devi anche
                 # controllare il vicinato. se il vicinato è costituito
-                # da tutte celle pulite, scopro le mine libere.
+                # da tutte celle pulite, scopro le celle libere.
 
         # return self.player_board, reward, ..
