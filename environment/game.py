@@ -70,16 +70,41 @@ class Game:
 
             self.board[i][j] = -1
     
+    def increment_neighbors(self, neigh_i, neigh_j):
+        """ Utility function used by compute_mines_around
+        to increment the counter of neighboring mines"""
+        # The position of the neighbor is given
+        # We check if it's a mine
+        if neigh_i < 0 or neigh_i >= self.board_height:
+            return
+        if neigh_j < 0 or neigh_j >= self.board_width:
+            return
+        
+        if self.board[neigh_i][neigh_j] == -1:
+            return
+        else:
+            self.board[neigh_i][neigh_j] += 1
+
     def compute_mines_around(self):
-        # TODO: implement the function which counts for how many mines
-        # are around a cell
-        pass
+        # Identify a mine in the board
+        # Once the mine is identified, we increment the number by one
+        # in all the cell around, exception made for the mines
+        for i in range(self.board_height):
+            for j in range(self.board_width):
+                if self.board[i][j] == -1:
+                    for ni in [-1, 0, 1]:
+                        for nj in [-1, 0, 1]:
+                            # ni and nj range in the discrete interval [-1, 1]
+                            # this is a trick to avoid calling increment_neighbors 8 times
+                            if ni == 0 and nj == 0:
+                                continue # we obviously don't involve the mine itself in the increment
+                            self.increment_neighbors(i + ni, j + nj)
     
     def print_board(self):
         """ Utility function to print the board status."""
         print(f"--- Board {self.board_width}x{self.board_height} ({self.num_mines} mines) ---")
         for row in self.board:
             # Priting 'X' for mine (-1) and '.' for empty cells (0)
-            rendered_row = [ "X" if cell == -1 else "." for cell in row ]
+            rendered_row = [ "X" if cell == -1 else str(cell) for cell in row ]
             print(" ".join(rendered_row))
         print("-" * 40)
