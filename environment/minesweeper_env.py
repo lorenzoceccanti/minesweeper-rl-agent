@@ -161,7 +161,7 @@ class MinesweeperEnv(gym.Env):
                 # da aprire sono rimaste. Se sono pari al numero
                 # di mine e non ho mai incontrato una mina, ho vinto
 
-                # L'idea, è che, quando clicchi una mina devi anche
+                # L'idea, è che, quando clicchi una cella sicura con 0 devi anche
                 # controllare il vicinato. se il vicinato è costituito
                 # da tutte celle pulite, scopro le mine libere.
 
