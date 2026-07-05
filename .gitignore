@@ -18,3 +18,6 @@ venv/
 
 # Esclude file creati dall'editor VS Code
 .vscode/
+
+# Esclude i file temporanei, compresi i main di prova
+tmp/
