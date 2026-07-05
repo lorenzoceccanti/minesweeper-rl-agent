@@ -13,6 +13,8 @@
 import numpy as np
 import gymnasium as gym
 from .game import Game
+from .pygame_constants import *
+import pygame
 
 class MinesweeperEnv(gym.Env):
     def __init__(
@@ -26,6 +28,11 @@ class MinesweeperEnv(gym.Env):
         """Constructs a customized environment for the Minesweeper Game"""
         super().__init__()
         
+        self.metadata = {
+            "render_modes": ["human"],
+            "render_fps": GUI_FPS,
+        }
+
         self.board_width = board_width
         self.board_height = board_height
         self.n_mines = n_mines
@@ -91,9 +98,36 @@ class MinesweeperEnv(gym.Env):
             "num_guess": 0,
             "num_progress": 0
         }
+        # GUI stuff
+        self.cell_size = GUI_CELL_SIZE
+        self.padding = GUI_PADDING
+        self.screen = None
+        self.window_width = (
+            self.board_width * self.cell_size
+            + 2 * self.padding
+        )
+
+        self.window_height = (
+            self.board_height * self.cell_size
+            + 2 * self.padding
+        )
 
         self.game = Game(board_width=self.board_width, board_height=self.board_height, num_mines=self.n_mines)
     
+        # Pygame resources are created only when human rendering is used.
+        
+        self.window = None
+        # What are these clock and font objects?
+        # The clock object is crucial to limit the speed with which the action
+        # taken are rendered at screen
+        self.clock = None
+        # The font object is crucial to understand the numbers on the board
+        self.font = None
+        # Coordinates of the last cell selected by the agent.
+        self.last_action = None
+        # Prevents the window from reopening after the user closes it.
+        self.window_closed = False
+
     def reset(self, *, seed=None, options=None):
         """ Reset the environment to an initial state
         Returns:
@@ -117,7 +151,16 @@ class MinesweeperEnv(gym.Env):
         # the observation space is of type Box, Gymnasium expects
         # NumPy array with coherent shape and type
 
-        return np.asarray(self.player_board, dtype=np.int8), self.info
+        self.last_action = None
+        observation = np.asarray(
+            self.player_board,
+            dtype=np.int8
+        )
+
+        if self.render_mode == "human":
+            self.render()
+
+        return observation, self.info
 
     def step(self, action):
         """ Take an action in the game environment"""
@@ -133,6 +176,9 @@ class MinesweeperEnv(gym.Env):
         # We convert a cell id into grid coordinates
         i = action // self.board_width
         j = action % self.board_width
+
+        # Updating last action with the action just done
+        self.last_action = (i,j)
 
         # If it's the first action that the agent performs, we
         # avoid penalizing the agent
@@ -205,4 +251,245 @@ class MinesweeperEnv(gym.Env):
         # is used when creating the environment: for example, when you want
         # to early terminate the episode after a certain number of iterations
         truncated = False
+
+        if self.render_mode == "human":
+            self.render()
+
         return observation, float(reward), terminated, truncated, self.info
+    
+    def _initialize_pygame(self):
+        """ Initialize Pygame window and its resources."""
+        # The window is already instantiated
+        if self.window is not None:
+            return
+        # Initializing pygame resources
+        pygame.init()
+        pygame.display.init()
+        pygame.font.init()
+
+        # Setting the window size
+        self.window = pygame.display.set_mode(
+            (self.window_width, self.window_height)
+        )
+        self.clock = pygame.time.Clock()
+        # Setting the window title
+        pygame.display.set_caption(GUI_WINDOW_TITLE)
+        # Setting the font size, at least 18 pt.
+        font_size = max(18, int(self.cell_size*0.65))
+        self.font = pygame.font.Font(
+            None, font_size
+        )
+
+    def _process_pygame_events(self):
+        """ Process Pygame events.
+        Returns False when the user closes the window"""
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                self.close()
+                return False
+        return True
+    
+    def _draw_hidden_cell(self, cell_rect):
+        """Draw a covered cell with a simple raised appearance."""
+
+        pygame.draw.rect(
+            self.window,
+            GUI_HIDDEN_CELL_COLOR,
+            cell_rect,
+        )
+
+        # Bordo chiaro superiore
+        pygame.draw.line(
+            self.window,
+            GUI_HIDDEN_CELL_HIGHLIGHT_COLOR,
+            cell_rect.topleft,
+            cell_rect.topright,
+            width=3,
+        )
+
+        # Bordo chiaro sinistro
+        pygame.draw.line(
+            self.window,
+            GUI_HIDDEN_CELL_HIGHLIGHT_COLOR,
+            cell_rect.topleft,
+            cell_rect.bottomleft,
+            width=3,
+        )
+
+        # Bordo scuro inferiore.
+        pygame.draw.line(
+            self.window,
+            GUI_HIDDEN_CELL_SHADOW_COLOR,
+            cell_rect.bottomleft,
+            cell_rect.bottomright,
+            width=3,
+        )
+
+        # Bordo scuro destro
+        pygame.draw.line(
+            self.window,
+            GUI_HIDDEN_CELL_SHADOW_COLOR,
+            cell_rect.topright,
+            cell_rect.bottomright,
+            width=3,
+        )
+
+    def _draw_mine(self, cell_rect):
+        """Draw a mine as an asterisk centered on a red cell."""
+
+        mine_surface = self.font.render(
+            "*",
+            True,
+            GUI_MINE_COLOR,
+        )
+
+        mine_rect = mine_surface.get_rect(
+            center=cell_rect.center
+        )
+
+        self.window.blit(
+            mine_surface,
+            mine_rect,
+        )
+
+    def _draw_number(self, cell_rect, number):
+        """Draw a centered Minesweeper number."""
+
+        number_color = GUI_NUMBER_COLORS.get(
+            number,
+            GUI_GRID_COLOR,
+        )
+
+        text_surface = self.font.render(
+            str(number),
+            True,
+            number_color,
+        )
+
+        text_rect = text_surface.get_rect(
+            center=cell_rect.center
+        )
+
+        self.window.blit(
+            text_surface,
+            text_rect,
+        )
+
+    def _draw_cell(self, i, j, cell_value):
+        """Draw one cell of the player board."""
+
+        # x e y sono le coordinate della cella sulla griglia di pygame.
+        # secondo la logica di pygame, il punto (0,0) è l'angolo in alto a sinistra
+        # x è la coordinata che indica lo spostamento nella direzione orizzontale,
+        # cosa che viene fatta dall'indice j del nostro environment.
+        # di conseguenza, y detta lo spostamento nella direzione verticale, ed è
+        # l'indice i di riga che determina la posizione verticale. 
+        # il padding serve ad evitare che si disegni la board esattamente
+        # da dove inizia il bordo.
+        x = self.padding + j * self.cell_size
+        y = self.padding + i * self.cell_size
+
+        cell_rect = pygame.Rect(
+            x,
+            y,
+            self.cell_size,
+            self.cell_size,
+        )
+
+        # Cella ignota
+        if cell_value == -2:
+            self._draw_hidden_cell(cell_rect)
+
+        # Cella nota, ed è una mina
+        elif cell_value == -1:
+            pygame.draw.rect(
+                self.window,
+                GUI_MINE_CELL_COLOR,
+                cell_rect,
+            )
+
+            self._draw_mine(cell_rect)
+        # Cella nota, ma non è una mina
+        else:
+            pygame.draw.rect(
+                self.window,
+                GUI_REVEALED_CELL_COLOR,
+                cell_rect,
+            )
+
+            if cell_value > 0:
+                self._draw_number(
+                    cell_rect,
+                    int(cell_value),
+                )
+
+        # Bordo ordinario della cella.
+        pygame.draw.rect(
+            self.window,
+            GUI_GRID_COLOR,
+            cell_rect,
+            width=1,
+        )
+
+        # Evidenzia la cella scelta nell'ultima azione.
+        if self.last_action == (i, j):
+            pygame.draw.rect(
+                self.window,
+                GUI_LAST_ACTION_COLOR,
+                cell_rect,
+                width=4,
+            )
+
+    def _draw_board(self):
+        """ Draws the game visibile board"""
+        for i in range(self.board_height):
+            for j in range(self.board_width):
+                cell_value = self.player_board[i][j]
+
+                self._draw_cell(
+                i=i,
+                j=j,
+                cell_value=cell_value,
+            )
+
+    def _render_frame(self):
+        """Draw and display one frame of the current game state."""
+        if self.window_closed:
+            return
+        self._initialize_pygame()
+        # se la finestra è chiusa
+        if not self._process_pygame_events():
+            return
+        self.window.fill(GUI_BACKGROUND_COLOR)
+        self._draw_board()
+        pygame.display.flip()
+        self.clock.tick(
+            self.metadata["render_fps"]
+        )
+
+    def render(self):
+        """Render the current player board in human mode."""
+
+        if self.render_mode is None:
+            return None
+
+        if self.render_mode == "human":
+            self._render_frame()
+            return None
+
+        raise NotImplementedError(
+            f"Render mode '{self.render_mode}' is not implemented"
+        )
+    
+    def close(self):
+        """Close the Pygame window and release rendering resources."""
+
+        self.window_closed = True
+
+        if self.window is not None:
+            pygame.display.quit()
+            pygame.quit()
+
+        self.window = None
+        self.clock = None
+        self.font = None
