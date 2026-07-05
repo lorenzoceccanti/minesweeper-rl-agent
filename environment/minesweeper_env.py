@@ -12,7 +12,7 @@
 
 import numpy as np
 import gymnasium as gym
-from game import Game
+from .game import Game
 
 class MinesweeperEnv(gym.Env):
     def __init__(
@@ -76,7 +76,7 @@ class MinesweeperEnv(gym.Env):
         self.R_lose = -(self.board_width * self.board_height) # find a mine
         self.R_progress = 1 # uncovering a safe cell
         self.R_guess = -0.5 # random guessing: the cell uncovered was safe, but all neighb. cells are undisclosed yet
-        self.R_alreadyOpen = -0.5 # choosing an already revealed cell
+        self.R_already_open = -0.5 # choosing an already revealed cell
 
         # We have a dictionary containing the stats about
         # the game played
@@ -87,7 +87,9 @@ class MinesweeperEnv(gym.Env):
             "n_win": 0,
             "n_lose": 0,
             "n_episodes": 0,
-            "num_no_progress": 0
+            "num_no_progress": 0,
+            "num_guess": 0,
+            "num_progress": 0
         }
 
         self.game = Game(board_width=self.board_width, board_height=self.board_height, num_mines=self.n_mines)
@@ -120,6 +122,13 @@ class MinesweeperEnv(gym.Env):
     def step(self, action):
         """ Take an action in the game environment"""
 
+        if self.done:
+            raise RuntimeError(
+                "step() called after the episode ended; call reset() first"
+            )
+
+        self.info = {}
+
         # For how we've defined the action space, an action is a cell id
         # We convert a cell id into grid coordinates
         i = action // self.board_width
@@ -141,28 +150,59 @@ class MinesweeperEnv(gym.Env):
 
             self.first_move = False
         
-        # If the episode is still going
-        if not self.done:
-            # Here we are differencing the game situations
-            # Situation 1: Agent chooses a cell already revealed safe
-            if self.game.is_safe_cell_discovered(i,j):
-                reward = self.R_alreadyOpen
-                self.done = False
-                self.info["status"] = "no_progress"
-                self.stats["num_no_progress"] += 1
+        # Here we are differencing the game situations
+        # Situation 1: the agent selects an already revealed safe cell
+        if self.game.is_safe_cell_discovered(i, j):
+            reward = self.R_already_open
+            self.info["status"] = "no_progress"
+            self.stats["num_no_progress"] += 1
+        else:
+            # We have to discriminate if we have
+            # won, if we lose or if we have to continue to play
+            status = self.game.check_game_status(i, j)
+
+            # Situation 2: the agent selects a mine
+            if status == -1:
+                self.player_board[i][j] = -1
+
+                reward = self.R_lose
+                self.done = True
+                self.info["status"] = "lost"
+
+                self.stats["n_lose"] += 1
+                self.stats["n_episodes"] += 1
             else:
-                # TODO
-                # Situation 2: Agent chooses a cell still to reveal
-                pass
-                # Situation 2.a: We have to discriminate if we have
-                # won, if we lose or if we have to continue to play
+                # Not a mine, game not over
+                # We have to distinguish between a random guess
+                # or not.
+                was_guess = self.game.is_random_guess(i, j)
+                # Reveal the selected safe cell and its connected empty region
+                self.game.uncover_cell(i, j)
+                # Victory must be checked after uncovering the cells
+                status = self.game.check_game_status(i, j)
+                # Situation 3: all the safe cells have now been revealed: victory!
+                if status == 1:
+                    reward = self.R_win
+                    self.done = True
+                    self.info["status"] = "won"
+                    self.stats["n_win"] += 1
+                    self.stats["n_episodes"] += 1
+                # Situation 4: safe cell guessed by chance
+                elif was_guess:
+                    reward = self.R_guess
+                    self.info["status"] = "guess"
+                    self.stats["num_guess"] += 1
+                # Situation 5: safe cell selected near numbered cell: intelligent progression
+                else:
+                    reward = self.R_progress
+                    self.info["status"] = "progress"
+                    self.stats["num_progress"] += 1
 
-                # fare un metodo che controlla quante celle
-                # da aprire sono rimaste. Se sono pari al numero
-                # di mine e non ho mai incontrato una mina, ho vinto
-
-                # L'idea, è che, quando clicchi una cella sicura con 0 devi anche
-                # controllare il vicinato. se il vicinato è costituito
-                # da tutte celle pulite, scopro le celle libere.
-
-        # return self.player_board, reward, ..
+        # Preparing the next state and the reward in the format expected by Gymnasium
+        observation = np.asarray(self.player_board, dtype=np.int8)
+        terminated = self.done
+        # Truncated will become True automatically, if a gym.wrapper.TimeLimit
+        # is used when creating the environment: for example, when you want
+        # to early terminate the episode after a certain number of iterations
+        truncated = False
+        return observation, float(reward), terminated, truncated, self.info

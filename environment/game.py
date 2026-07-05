@@ -37,6 +37,7 @@ class Game:
         self.board = []
         # At reset, all the cells are unrevealed -> 0
         self.player_board = []
+        self.opened_cells = 0
 
         # Attenzione, height ci da il numero di righe
         # mentre width ci da il numero di colonne
@@ -58,7 +59,7 @@ class Game:
         return self.board, self.player_board
     
     def place_mines(self, rng):
-        """" Place mines in the board
+        """ Place mines in the board
         A mine is identified into the board with -1
         """
         
@@ -126,6 +127,33 @@ class Game:
         else:
             return False
     
+    def is_random_guess(self, i, j):
+        # This method has to access player_board only. The reward will
+        # depend on the board status available for the agent
+        """ Return True if all valid neighboring cells are still hidden (i.e. the
+        agent makes a random guess)."""
+
+        if not self.check_boundaries(i, j):
+            raise IndexError("Cell coordinates are outside the board")
+
+        for off_i in (-1, 0, 1):
+            for off_j in (-1, 0, 1):
+                if off_i == 0 and off_j == 0:
+                    continue
+
+                neighbor_i = i + off_i
+                neighbor_j = j + off_j
+
+                if not self.check_boundaries(neighbor_i, neighbor_j):
+                    continue
+                # Arrivati a questo punto, se trovo un vicino numerato
+                # mi fermo subito: sicuramente l'azione non è stato
+                # frutto di un random guess
+                if self.player_board[neighbor_i][neighbor_j] >= 0:
+                    return False
+        return True
+            
+    
     def check_game_status(self, i, j):
         """ Given an action as coordinate of a cell, the method determines
         whether the game is ended, is won or still has to continue.
@@ -146,7 +174,7 @@ class Game:
         
     def uncover_cell(self, i, j):
         """Reveal a safe cell and, if it is empty, its connected empty region."""
-        if not self.is_inside_board(i, j):
+        if not self.check_boundaries(i, j):
             raise IndexError("Cell coordinates are outside the board")
 
         if self.board[i][j] == -1:
@@ -168,13 +196,14 @@ class Game:
                 continue
 
             # Ensuring not to reveal a mine during the uncovering process
-            if self.board[current_i][current_j] != -1:
+            if self.board[current_i][current_j] == -1:
                 continue
                 
             # Revealing the current safe cell (the current safe cell for
             # how the code is implemented could be both a clicked cell or
             # a neighbor of a 0 cell)
             self.player_board[current_i][current_j] = self.board[current_i][current_j]
+            self.opened_cells += 1
 
             # If the just revealed cell has a number > 0 (mines around), stop
             # current the iteration here. We do not propagate the lookup, and consequently
@@ -194,7 +223,7 @@ class Game:
                     neighbor_j = current_j + off_j
 
                     # Same checks made on the start
-                    if not self.is_inside_board(neighbor_i, neighbor_j):
+                    if not self.check_boundaries(neighbor_i, neighbor_j):
                         continue
 
                     if self.player_board[neighbor_i][neighbor_j] != -2:
