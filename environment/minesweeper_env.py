@@ -67,8 +67,8 @@ class MinesweeperEnv(gym.Env):
         # The observation for this game consists in the state of the board
         # A cell in the board could be in the following states
         # -2: unrevealed cell
-        # -1: revealed mined cell
-        # 0..8: a safe cell, with the number of mines around
+        # -1: IS SKIPPED.
+        # 0..8: a reveladed safe cell, with the number of mines around
 
         self.observation_space = gym.spaces.Box(
                 low=-2,
@@ -209,7 +209,6 @@ class MinesweeperEnv(gym.Env):
 
             # Situation 2: the agent selects a mine
             if status == -1:
-                self.player_board[i][j] = -1
 
                 reward = self.R_lose
                 self.done = True
@@ -446,6 +445,27 @@ class MinesweeperEnv(gym.Env):
             for j in range(self.board_width):
                 cell_value = self.player_board[i][j]
 
+                # The triggered mine is shown only by the renderer.
+                # It is not inserted into the observation seen by the agent.
+                # We do in this way, because this would introduce a mis-match
+                # in the number of channels to be used in the tensor to be
+                # passed to the q-net.
+
+                # se done è True e se lo stato è lost e l'ultima azione fatta
+                # dall'agente è proprio la cella (i,j) che sto renderizzando
+                # e la cella che sto renderizzando è una mina
+                is_triggered_mine = (
+                    self.done
+                    and self.info.get("status") == "lost"
+                    and self.last_action == (i, j)
+                    and self.board[i][j] == -1
+                )
+
+                if is_triggered_mine:
+                    cell_value = -1
+
+                # cell_value does not represent a value present in the player_board:
+                # it's only a temporary value used during the rendering process.
                 self._draw_cell(
                 i=i,
                 j=j,

@@ -21,8 +21,9 @@ class Game:
         # 1..8 cella sicura, con indicato quante mine intorno ad una cella sicura
         # -1 mina
         self.board = []
-        # la player board rappresenta l'informazione delle celle non ancora
-        # rivelate con -2
+        # The player board contains only observable information:
+        # -2 for unrevealed cells and 0..8 for revealed safe cells.
+        # Mines are never stored in the player board.
         self.player_board = []
 
 
@@ -35,7 +36,7 @@ class Game:
     
         # Empyting the board first
         self.board = []
-        # At reset, all the cells are unrevealed -> 0
+        # At reset, all the cells are unrevealed -> -2
         self.player_board = []
         self.opened_cells = 0
 
@@ -249,7 +250,7 @@ class Game:
         print(f"--- PLAYER Board {self.board_width}x{self.board_height} ({self.num_mines} mines) ---")
         for row in self.player_board:
             rendered_row = [
-                "X" if cell == -1 else ("?" if cell == -2 else str(cell)) 
+                "?" if cell == -2 else str(cell)
                 for cell in row
             ]
             print(" ".join(rendered_row))
