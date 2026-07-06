@@ -11,7 +11,6 @@ class FullyConvQNetwork(nn.Module):
         ):
         
         super().__init__()
-        # TODO: one-hot embedding of the observation space
         # Making an half-padded convolution to not change
         # the orignal tensor shape
         # L'operatore // prende già la parte intera inferiore
