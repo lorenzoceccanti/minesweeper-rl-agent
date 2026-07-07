@@ -75,12 +75,76 @@ class DQNAgent:
         self.epsilon_decay = epsilon_decay
         self.final_epsilon = final_epsilon
 
+        # == Evaluation
         self.training_error = []
         self.loss_history = []
+        self.episode_rewards = [] # i-th element contains the return of the i-th episode
+        self.episode_lengths = [] # i-th element contains the number of actions of the i-th episode
+        self.episode_wins = [] # i-th element contains 1 if the i-th episode concluded with a win
+        self.epsilon_history = [] # i-th element contains the eps used in the i-th episode
+        self.last_checkpoint_path = None
 
         # This is the counter of timesteps elapsed
         self.global_step = 0
 
+    def save_checkpoint(
+            self,
+            checkpoint_dir: str | Path = "checkpoints",
+    ) -> Path:
+        
+        checkpoint_dir = Path(checkpoint_dir)
+        # Se il percorso è relativo, viene risolto rispetto
+        # alla root del progetto.
+        if not checkpoint_dir.is_absolute():
+            project_root = Path(__file__).resolve().parents[1]
+            checkpoint_dir = project_root / checkpoint_dir
+
+        checkpoint_dir.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        timestamp = datetime.now().strftime(
+            "%Y-%m-%d-%H-%M-%S"
+        )
+
+        checkpoint_path = (
+            checkpoint_dir / f"{timestamp}.pt"
+        )
+
+        checkpoint = {
+            # Model
+            "online_network_state_dict":
+                self.online_network.state_dict(),
+
+            "target_network_state_dict":
+                self.target_network.state_dict(),
+
+            "optimizer_state_dict":
+                self.optimizer.state_dict(),
+
+            # Training state
+            "epsilon": self.epsilon,
+            "global_step": self.global_step,
+            "seed": self.seed,
+
+            # Per-episode metrics
+            "episode_rewards": self.episode_rewards,
+            "episode_lengths": self.episode_lengths,
+            "episode_wins": self.episode_wins,
+            "epsilon_history": self.epsilon_history,
+
+            # Gradient update metrics
+            "loss_history": self.loss_history,
+            "training_error": self.training_error,
+        }
+
+        torch.save(
+            checkpoint,
+            checkpoint_path,
+        )
+
+        return checkpoint_path
 
     def get_action(self, obs: np.ndarray) -> int:
         """
@@ -284,7 +348,8 @@ class DQNAgent:
         self.loss_history.append(loss.item())
         return loss.item()
 
-    def train(self, n_episodes: int, log=False):
+    def train(self, n_episodes: int, save_checkpoint: bool = False,
+              checkpoint_dir: str | Path = "checkpoints"):
         # Log output is an array of strings to be returned to stdout
         # if the log option is set to true
         for episode in tqdm(range(n_episodes)):
@@ -367,6 +432,10 @@ class DQNAgent:
             else:
                 end_reason = "truncated"
 
+            self.episode_rewards.append(float(episode_reward))
+            self.episode_lengths.append(int(episode_steps))
+            self.episode_wins.append(int(end_reason == "won"))
+            self.epsilon_history.append(float(self.epsilon))
             if self.logger is not None:
                 self.logger.info(
                     f"Episode {episode + 1}/{n_episodes} completed: "
@@ -378,3 +447,12 @@ class DQNAgent:
 
             # Reduce the exploration rate (the self becomes less random over time)
             self.decay_epsilon()
+        if self.save_checkpoint:
+            self.last_checkpoint_path = self.save_checkpoint(
+                checkpoint_dir=checkpoint_dir,
+            )
+
+            print(
+                f"Checkpoint saved to: "
+                f"{self.last_checkpoint_path}"
+            )
