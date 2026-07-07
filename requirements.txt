@@ -3,3 +3,4 @@ tqdm==4.68.3
 torch==2.12.1
 matplotlib==3.11.0
 gymnasium==1.3.0
+pygame==2.6.1
