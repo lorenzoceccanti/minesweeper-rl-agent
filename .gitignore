@@ -28,3 +28,4 @@ tmp/
 
 # LaTeX build output (report/)
 report/build/
+report/indent.log

@@ -1,0 +1,37 @@
+% !TeX root = ../slides.tex
+% 04-environment.tex — implementation details of the custom Gymnasium env.
+
+\section{Environment Implementation}
+
+\begin{frame}{Custom Gymnasium Environment}
+  \texttt{MinesweeperEnv(gym.Env)} wraps a pure game-logic class
+  \texttt{Game}, decoupled from the Gymnasium API and from rendering:
+  \begin{itemize}
+    \item \texttt{Game}: mine placement, adjacency counts, iterative
+      flood-fill uncovering of empty regions (stack-based, avoids deep
+      recursion), win/loss detection.
+    \item \texttt{MinesweeperEnv}: \texttt{reset}/\texttt{step}/
+      \texttt{render}/\texttt{close}, reward assignment, episode
+      statistics.
+    \item Optional \texttt{human} render mode via Pygame, fully
+      independent from the agent's observation.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Design Choices for Stable Training}
+  \begin{itemize}
+    \item \textbf{Safe first move}: if the first action hits a mine, the
+      board is regenerated from the same RNG (not reseeded) until the
+      first move is safe — avoids penalizing an unavoidable loss and
+      keeps the training signal stable.
+    \item \textbf{Mines never revealed to the agent}: even at a losing
+      terminal step, the mine stays $-1$ only in the internal board; the
+      \texttt{player\_board} keeps it as $-2$. Loss is communicated
+      through the terminal reward alone, keeping the observation
+      alphabet at 10 symbols (consistent with the planned one-hot
+      encoding).
+    \item \textbf{Guess detection}: a safe move is a guess if \emph{all}
+      its neighbors are still unrevealed — used only for reward shaping,
+      not for masking actions.
+  \end{itemize}
+\end{frame}
