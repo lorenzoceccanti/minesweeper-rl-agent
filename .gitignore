@@ -30,3 +30,5 @@ tmp/
 report/build/
 report/indent.log
 /log
+/checkpoints
+/plots
