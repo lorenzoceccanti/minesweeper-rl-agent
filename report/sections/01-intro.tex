@@ -1,0 +1,75 @@
+% !TeX root = ../slides.tex
+% 01-intro.tex — generic element templates (placeholder content).
+% Purpose: show how to use each building block from settings.tex.
+% Replace this whole file with real content once it is decided; keep the
+% structure (one frame per element type) as a reference if useful.
+
+\section{Element Templates}
+
+\begin{frame}{Bullet List \& Highlight Box}
+  \begin{highlightbox}{Key takeaway}
+    Use this box to emphasize a single definition, result, or claim.
+  \end{highlightbox}
+  \begin{itemize}
+    \item First supporting point.
+    \item Second point, with an \alert{highlighted} keyword.
+    \item Third point, using \emph{emphasis} for terminology.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Two-Column Layout}
+  \twocol{
+    \textbf{Left column}
+    \begin{itemize}
+      \item Placeholder point A
+      \item Placeholder point B
+    \end{itemize}
+  }{
+    \centering
+    \begin{tikzpicture}
+      \node[state] (a) {A};
+      \node[state, right=of a] (b) {B};
+      \draw[flowarrow] (a) -- (b);
+    \end{tikzpicture}
+  }
+\end{frame}
+
+\begin{frame}{Math Formulas}
+  Inline math: $f(x) = \sum_i w_i x_i + b$.
+  \[
+    \E{X} = \int x \, p(x) \, dx
+  \]
+  Aligned system:
+  \begin{align*}
+    a & = b + c \\
+    d & = e - f
+  \end{align*}
+\end{frame}
+
+\begin{frame}{TikZ Diagram}
+  \centering
+  \begin{tikzpicture}[node distance=2.2cm]
+    \node[state] (s1) {$S_1$};
+    \node[state, right=of s1] (s2) {$S_2$};
+    \node[action, below=of s1] (a1) {$A_1$};
+    \draw[flowarrow] (s1) -- (s2);
+    \draw[flowarrow] (a1) -- (s1);
+  \end{tikzpicture}
+\end{frame}
+
+\begin{frame}{Table \& Citations}
+  \begin{table}
+    \centering
+    \begin{tabularx}{\textwidth}{l X X}
+      \toprule
+            & \textbf{Column A} & \textbf{Column B} \\
+      \midrule
+      Row 1 & value             & value             \\
+      Row 2 & value             & value             \\
+      \bottomrule
+    \end{tabularx}
+    \caption{Generic placeholder table.}
+  \end{table}
+  Parenthetical citation: \parencite{wang2025minesweepercnn}. Narrative
+  citation: \textcite{wang2025minesweepercnn}.
+\end{frame}
