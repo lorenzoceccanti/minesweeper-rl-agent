@@ -19,12 +19,39 @@
       \item no flagging, no action masking (v1)
     \end{itemize}
   }
-  \vspace{0.3cm}
-  \begin{highlightbox}{Planned network input}
-    One-hot tensor $(10, H, W)$: channels $0$–$8$ for revealed values,
-    channel $9$ for unrevealed cells \parencite{wang2025minesweepercnn} —
-    encoder not yet implemented.
-  \end{highlightbox}
+\end{frame}
+
+\begin{frame}{Planned Input Encoding}
+  \twocol{
+    Each cell of the raw observation is mapped to a length-10 one-hot
+    vector \parencite{wang2025minesweepercnn}:
+    \begin{itemize}
+      \item channels $0$–$8$: revealed value;
+      \item channel $9$: unrevealed cell;
+      \item no channel for mines — never observed.
+    \end{itemize}
+    \begin{highlightbox}{Not yet implemented}
+      Encoder \texttt{player\_board} $\to$ tensor $(10, H, W)$ is designed
+      but not built.
+    \end{highlightbox}
+  }{
+    \centering
+    \begin{tikzpicture}
+      \node[mscell, fill=msrevealed, minimum size=1.1cm, font=\Large] (cell) at (0,0) {\msnum{3}};
+      \draw[flowarrow] (cell.east) -- node[midway, above, font=\tiny] {one-hot} ++(1.2,0);
+      \foreach \k in {0,...,9} {
+        \pgfmathsetmacro{\ypos}{2.475-0.55*\k}
+        \ifnum\k=3
+          \node[draw=accentgray, minimum width=1.6cm, minimum height=0.55cm,
+                fill=unipiblue, text=white, font=\bfseries\small] at (2.55,\ypos) {\k};
+        \else
+          \node[draw=accentgray, minimum width=1.6cm, minimum height=0.55cm,
+                fill=lightgray, font=\small] at (2.55,\ypos) {\k};
+        \fi
+      }
+      \node[font=\small] at (2.55,-3.15) {channel index $0..9$};
+    \end{tikzpicture}
+  }
 \end{frame}
 
 \begin{frame}{Reward Function}

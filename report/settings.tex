@@ -84,6 +84,20 @@
 \definecolor{goodgreen}{HTML}{2E7D32}
 \definecolor{badred}{HTML}{C62828}
 
+% Minesweeper board palette — mirrors environment/pygame_constants.py so
+% board figures in the slides match the actual game renderer.
+\definecolor{mshidden}{RGB}{150,150,150}
+\definecolor{msrevealed}{RGB}{225,225,225}
+\definecolor{msmine}{RGB}{220,100,100}
+\definecolor{msnum1}{RGB}{25,80,200}
+\definecolor{msnum2}{RGB}{20,125,45}
+\definecolor{msnum3}{RGB}{210,40,40}
+\definecolor{msnum4}{RGB}{85,35,145}
+\definecolor{msnum5}{RGB}{135,45,30}
+\definecolor{msnum6}{RGB}{25,135,140}
+\definecolor{msnum7}{RGB}{20,20,20}
+\definecolor{msnum8}{RGB}{100,100,100}
+
 \setbeamercolor{palette primary}{bg=unipiblue, fg=white}
 \setbeamercolor{frametitle}{bg=unipiblue, fg=white}
 \setbeamercolor{progress bar}{fg=unipiblue, bg=lightgray}
@@ -162,4 +176,17 @@
 state/.style={circle, draw=unipiblue, thick, minimum size=1cm, fill=lightgray},
 action/.style={rectangle, draw=accentgray, thick, minimum size=0.8cm, rounded corners},
 flowarrow/.style={-{Latex[length=2mm]}, thick, unipiblue},
+component/.style={rectangle, draw=unipiblue, thick, rounded corners, fill=lightgray,
+  minimum width=2.1cm, minimum height=0.9cm, align=center, font=\small},
+mscell/.style={draw=accentgray, minimum size=0.9cm, anchor=center, font=\sffamily},
 }
+
+% Colored Minesweeper number, matching the Pygame renderer palette.
+\newcommand{\msnum}[1]{\textcolor{msnum#1}{\textbf{#1}}}
+
+% One board cell, placed explicitly (no tikz matrix library needed):
+% \msc[extra options]{x}{y}{fill-color}{content}
+\newcommand{\msc}[5][]{\node[mscell, fill=#4, #1] at (#2,#3) {#5};}
+
+% Small legend swatch for board figures: \mslegend{fill-color}{label}
+\newcommand{\mslegend}[2]{\tikz[baseline=-0.5ex]{\node[mscell, fill=#1, minimum size=0.4cm]{};}~#2}
