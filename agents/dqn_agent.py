@@ -6,6 +6,8 @@ import torch
 import torch.nn as nn
 import numpy as np
 from tqdm import tqdm
+from datetime import datetime
+from pathlib import Path
 
 class DQNAgent:
     def __init__(
@@ -23,8 +25,10 @@ class DQNAgent:
         target_update_frequency: int = 500,
         learning_starts: int = 1_000,
         train_frequency: int = 1,
+        logger = None
     ):
         self.seed = seed
+        self.logger = logger
         self.rng = np.random.default_rng(seed)
         self.device = device
         # == Environment ==
@@ -81,12 +85,31 @@ class DQNAgent:
     def get_action(self, obs: np.ndarray) -> int:
         """
         Selects an action using an epsilon-greedy policy.
+        This implementation performs action masking, in order
+        to consider only currently unrevealed cells.
         Args:
             obs: Current player board with shape [H, W].
         Returns:
             Flattened index of the selected cell, in the range
             [0, H * W - 1].
         """
+
+        # A cell is selectable only if it's still unrevealed.
+        # Recall:
+        # obs tensor has shape [H, W]
+        # while, actions are represented as integers between 0 and (H*W)1
+        # For this reason, when creating the boolean mask for action
+        # masking, we have to reshape the observation tensor to have shape [H*W]
+        # shape of valid_action_mask: [H*W]
+        valid_action_mask = obs.reshape(-1) == -2
+        # qui ci sono solo gli indici delle celle non ancora selezionate,
+        # come numpy array
+        valid_actions = np.flatnonzero(valid_action_mask)
+
+        if valid_actions.size == 0:
+            raise RuntimeError(
+                "No valid actions are available in a non-terminal state."
+            )
 
         # Exploration: choosing a random cell (with probability epsilon)
         if self.rng.random() < self.epsilon:
@@ -104,6 +127,17 @@ class DQNAgent:
         # [H, W] -> [1, C, H, W]
         encoded_obs = encodings.one_hot_encode_board(obs_tensor)
 
+        # valid_action_mask: [H*W]
+        # valid_action_mask_tensor: [1, H*W]
+        # the unsqueeze is done in order to make coincide
+        # the shape of the action mask with the shape of Q values
+        valid_action_mask_tensor = torch.as_tensor(
+            valid_action_mask,
+            dtype=torch.bool,
+            device=self.device,
+        ).unsqueeze(0)
+
+
         # Importante: durante l'exploitation (action selection con p = 1-eps)
         # i q_values sono presi dalla rete con parametri theta, cioè dalla
         # online network. Però tale online network deve essere utilizzata
@@ -112,8 +146,15 @@ class DQNAgent:
         with torch.no_grad():
             # [1, 10, H, W] -> [1, H * W]
             q_values = self.online_network(encoded_obs)
+
+            # THE TRICK: IN ACTION MASKING INVALID ACTIONS RECEIVE Q = -INFINITY.
+            # IN THIS WAY, THEY CANNOT BE SELECTED BY THE ARGMAX
+            masked_q_values = q_values.masked_fill(
+                ~valid_action_mask_tensor,
+                -torch.inf,
+            )
             # [1, H * W] -> scalar action index
-            action = torch.argmax(q_values, dim=1).item()
+            action = torch.argmax(masked_q_values, dim=1).item()
         return int(action)
 
     def decay_epsilon(self):
@@ -140,17 +181,45 @@ class DQNAgent:
             self.batch_size
         )
 
-        obs = torch.tensor(obs, dtype=torch.long, device=self.device)
-        actions = torch.tensor(actions, dtype=torch.long, device=self.device)
-        rewards = torch.tensor(rewards, dtype=torch.float32, device=self.device)
-        terminateds = torch.tensor(terminateds, dtype=torch.float32, device=self.device)
-        next_obs = torch.tensor(next_obs, dtype=torch.long, device=self.device)
+        obs_tensor = torch.as_tensor(
+            obs,
+            dtype=torch.long,
+            device=self.device,
+        )
 
-        # One-hot encoding of the observations
-        # We don't save directly the one hot encoding in the replay buffer to save
-        # space.
-        obs = encodings.one_hot_encode_board(obs)
-        next_obs = encodings.one_hot_encode_board(next_obs)
+        actions = torch.as_tensor(
+            actions,
+            dtype=torch.long,
+            device=self.device,
+        )
+
+        rewards = torch.as_tensor(
+            rewards,
+            dtype=torch.float32,
+            device=self.device,
+        )
+
+        terminateds = torch.as_tensor(
+            terminateds,
+            dtype=torch.float32,
+            device=self.device,
+        )
+
+        next_obs_tensor = torch.as_tensor(
+            next_obs,
+            dtype=torch.long,
+            device=self.device,
+        )
+
+        # [batch_size, H, W] -> [batch_size, H * W]
+        next_valid_action_mask = (
+            next_obs_tensor
+            .eq(-2)
+            .flatten(start_dim=1)
+        )
+
+        obs = encodings.one_hot_encode_board(obs_tensor)
+        next_obs = encodings.one_hot_encode_board(next_obs_tensor)
 
         # Prendo i Q-values dati dalla online_network, relativamente
         # ad ognuno degli stati presenti nel minibatch (sono dentro al tensore obs)
@@ -173,8 +242,23 @@ class DQNAgent:
         # In this part of the code we compute the Target, by using the target net
         with torch.no_grad():
             next_q_values = self.target_network(next_obs)
-            # max_a'Q(s_j,a',theta-)
-            max_next_q_values = next_q_values.max(dim=1).values
+            # TRICK: we put for actions already selected a -inf value
+            masked_next_q_values = next_q_values.masked_fill(
+                ~next_valid_action_mask,
+                -torch.inf,
+            )
+            has_valid_actions = next_valid_action_mask.any(dim=1)
+            # max_a'Q(s_j,a',theta-), only on unmasked actions
+            max_next_q_values = masked_next_q_values.max(dim=1).values
+
+            # Avoid -inf values when no valid actions exist.
+            # This is mainly relevant for terminal states.
+            max_next_q_values = torch.where(
+                has_valid_actions,
+                max_next_q_values,
+                torch.zeros_like(max_next_q_values),
+            )
+
             # in one shot, we handle both the case for terminal
             # and not terminal states
             # if we are in a terminal state, terminateds = 1.0
@@ -203,7 +287,6 @@ class DQNAgent:
     def train(self, n_episodes: int, log=False):
         # Log output is an array of strings to be returned to stdout
         # if the log option is set to true
-        log_output = []
         for episode in tqdm(range(n_episodes)):
             # Il seed per la board lo imposto una volta sola, sennò
             # ad ogni episode avrei sempre la stessa board
@@ -214,11 +297,6 @@ class DQNAgent:
 
             episode_reward = 0.0
             episode_steps = 0
-
-            # == LOGGING ==
-            if log:
-                log_output.append(f"\n--- Episode {episode + 1}/{n_episodes} ---")
-            # =============
 
             while not (terminated or truncated):
                 # Choosing an action using eps-greedy
@@ -240,18 +318,16 @@ class DQNAgent:
                 column = int(action) % board_width
 
                 # Log of a single timestep of an episode
-                if log:
-                    log_output.append(
+                if self.logger is not None:
+                    self.logger.debug(
                         f"step={episode_steps:3d} | "
                         f"global_step={self.global_step + 1:6d} | "
                         f"action={int(action):3d} | "
                         f"cell=({row}, {column}) | "
                         f"reward={float(reward):6.1f} | "
-                        f"status={info.get('status')} | "
-                        f"terminated={terminated} | "
-                        f"truncated={truncated}"
+                        f"status={info.get('status')}"
                     )
-
+                
                 # ===========================================
 
                 # Storing a transition into the replay buffer
@@ -291,9 +367,9 @@ class DQNAgent:
             else:
                 end_reason = "truncated"
 
-            if log:
-                log_output.append(
-                    f"Episode completed: "
+            if self.logger is not None:
+                self.logger.info(
+                    f"Episode {episode + 1}/{n_episodes} completed: "
                     f"reason={end_reason}, "
                     f"steps={episode_steps}, "
                     f"total_reward={episode_reward:.1f}, "
@@ -302,8 +378,3 @@ class DQNAgent:
 
             # Reduce the exploration rate (the self becomes less random over time)
             self.decay_epsilon()
-            if log:
-                # Immediately print after the episode
-                print("\n".join(log_output))
-        # At the end of the episode, we return all the log history
-        return log_output
