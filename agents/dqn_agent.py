@@ -12,6 +12,7 @@ class DQNAgent:
         self,
         env: gym.Env,
         device: torch.device,
+        seed,
         learning_rate: float,
         initial_epsilon: float,
         epsilon_decay: float,
@@ -23,10 +24,13 @@ class DQNAgent:
         learning_starts: int = 1_000,
         train_frequency: int = 1,
     ):
+        self.seed = seed
+        self.rng = np.random.default_rng(seed)
         self.device = device
         # == Environment ==
         self.env = env
-
+        if seed is not None:
+            self.env.action_space.seed(seed)
         # == Neural Networks ==
 
         # number of environment steps collected before training starts
@@ -85,7 +89,7 @@ class DQNAgent:
         """
 
         # Exploration: choosing a random cell (with probability epsilon)
-        if np.random.random() < self.epsilon:
+        if self.rng.random() < self.epsilon:
             return int(self.env.action_space.sample())
 
         # Converting the NumPy board into a PyTorch tensor
@@ -196,16 +200,59 @@ class DQNAgent:
         self.loss_history.append(loss.item())
         return loss.item()
 
-    def train(self, n_episodes: int):
+    def train(self, n_episodes: int, log=False):
+        # Log output is an array of strings to be returned to stdout
+        # if the log option is set to true
+        log_output = []
         for episode in tqdm(range(n_episodes)):
-            obs, info = self.env.reset()
-            episodeDone = False
+            # Il seed per la board lo imposto una volta sola, sennò
+            # ad ogni episode avrei sempre la stessa board
+            episode_seed = self.seed if episode == 0 else None
+            obs, info = self.env.reset(seed=episode_seed)
+            terminated = False
+            truncated = False
 
-            while not episodeDone:
+            episode_reward = 0.0
+            episode_steps = 0
+
+            # == LOGGING ==
+            if log:
+                log_output.append(f"\n--- Episode {episode + 1}/{n_episodes} ---")
+            # =============
+
+            while not (terminated or truncated):
                 # Choosing an action using eps-greedy
                 action = self.get_action(obs)
                 # Take action, observe reward and next state from the environment
                 next_obs, reward, terminated, truncated, info = self.env.step(action)
+
+                # === LOGGING ===================================
+                # Updating statistics of the episode
+                episode_steps += 1
+                episode_reward += float(reward)
+
+                # Reconstruction of the coordinate of the clicked cell
+                # starting from the obs object
+                # action = row * board_width + column
+                # same formula as the one used in the environment
+                board_width = obs.shape[1]
+                row = int(action) // board_width
+                column = int(action) % board_width
+
+                # Log of a single timestep of an episode
+                if log:
+                    log_output.append(
+                        f"step={episode_steps:3d} | "
+                        f"global_step={self.global_step + 1:6d} | "
+                        f"action={int(action):3d} | "
+                        f"cell=({row}, {column}) | "
+                        f"reward={float(reward):6.1f} | "
+                        f"status={info.get('status')} | "
+                        f"terminated={terminated} | "
+                        f"truncated={truncated}"
+                    )
+
+                # ===========================================
 
                 # Storing a transition into the replay buffer
                 self.replay_buffer.push(
@@ -234,9 +281,29 @@ class DQNAgent:
                 if self.global_step % self.target_update_frequency == 0:
                     self.update_target_network()
 
-                # Moving to the next state, checking if we arrived to the terminal state
-                episodeDone = terminated or truncated
+                # Moving to the next state
                 obs = next_obs
+
+            # ===== LOGGING ====== 
+            # Log at the end of the episode
+            if terminated:
+                end_reason = info.get("status", "terminated")
+            else:
+                end_reason = "truncated"
+
+            if log:
+                log_output.append(
+                    f"Episode completed: "
+                    f"reason={end_reason}, "
+                    f"steps={episode_steps}, "
+                    f"total_reward={episode_reward:.1f}, "
+                    f"epsilon={self.epsilon:.4f}"
+                )
 
             # Reduce the exploration rate (the self becomes less random over time)
             self.decay_epsilon()
+            if log:
+                # Immediately print after the episode
+                print("\n".join(log_output))
+        # At the end of the episode, we return all the log history
+        return log_output
