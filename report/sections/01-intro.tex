@@ -1,0 +1,80 @@
+% !TeX root = ../slides.tex
+% 01-intro.tex — motivation and problem statement.
+
+\section{Motivation}
+
+\begin{frame}{Minesweeper as a Sequential Decision Problem}
+  \begin{highlightbox}{Standard RL Project goal}
+    Implement and rigorously compare at least two distinct DRL techniques
+    on a custom Minesweeper MDP.
+  \end{highlightbox}
+  \begin{itemize}
+    \item Grid of $H \times W$ cells, $N$ hidden mines; revealed safe cells
+          show the count of adjacent mines ($0$–$8$).
+    \item Goal: uncover every safe cell without ever selecting a mine.
+    \item Fully observable state (the player board fully summarizes what is
+          known), but \alert{partial information} about mine locations drives
+          the decision-making difficulty.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Anatomy of a Board}
+  \centering
+  \begin{tikzpicture}
+    % Row 0 — all hidden
+    \msc{0}{0}{mshidden}{}
+    \msc{1}{0}{mshidden}{}
+    \msc{2}{0}{mshidden}{}
+    \msc{3}{0}{mshidden}{}
+    % Row 1 — the clicked mine (red); one more mine hides at the right,
+    % indistinguishable from an ordinary hidden cell
+    \msc{0}{-1}{mshidden}{}
+    \msc{1}{-1}{mshidden}{}
+    \msc{2}{-1}{msmine}{\textcolor{white}{\faBomb}}
+    \msc{3}{-1}{mshidden}{}
+    % Row 2 — numbered border; the left cell hides a third mine
+    \msc{0}{-2}{mshidden}{}
+    \msc{1}{-2}{msrevealed}{\msnum{2}}
+    \msc{2}{-2}{msrevealed}{\msnum{2}}
+    \msc{3}{-2}{msrevealed}{\msnum{2}}
+    % Row 3 — safely revealed
+    \msc{0}{-3}{msrevealed}{\msnum{1}}
+    \msc{1}{-3}{msrevealed}{\msnum{1}}
+    \msc{2}{-3}{msrevealed}{}
+    \msc{3}{-3}{msrevealed}{}
+  \end{tikzpicture}
+
+  \vspace{0.35cm}
+  \mslegend{mshidden}{Hidden} \qquad
+  \mslegend{msrevealed}{Revealed / number} \qquad
+  \mslegend{msmine}{Mine that ended the episode}
+
+  \vspace{0.25cm}
+  \small A $4\times4$ example after a loss. Three mines sit on this board,
+  but only the one just clicked is ever revealed — the numbers still
+  correctly count \emph{all} neighboring mines, hidden or not.
+\end{frame}
+
+\begin{frame}{Why Minesweeper for RL}
+  \twocol{
+    \begin{itemize}
+      \item Discrete, tunable state/action space ($H\!\times\!W$ scales
+            difficulty).
+      \item Sparse terminal reward (win/loss) plus dense shaping signals.
+      \item Deterministic transition rule given the board $\Rightarrow$
+            stochasticity comes only from mine placement.
+      \item Existing DRL literature to compare against \parencite{wang2025minesweepercnn}.
+    \end{itemize}
+  }{
+    \centering
+    \begin{tikzpicture}[node distance=1.6cm]
+      \node[state] (s) {$s_t$};
+      \node[action, right=of s] (a) {$a_t$};
+      \node[state, right=of a] (s2) {$s_{t+1}$};
+      \draw[flowarrow] (s) -- (a);
+      \draw[flowarrow] (a) -- (s2);
+    \end{tikzpicture}
+    \vspace{0.4cm}
+    \small Uncover cell $\Rightarrow$ new board state, reward $r_t$.
+  }
+\end{frame}

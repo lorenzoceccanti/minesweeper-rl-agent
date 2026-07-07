@@ -21,3 +21,11 @@ venv/
 
 # Esclude i file temporanei, compresi i main di prova
 tmp/
+
+# Esclude directory di tool vari
+.claude/
+.tokensave/
+
+# LaTeX build output (report/)
+report/build/
+report/indent.log

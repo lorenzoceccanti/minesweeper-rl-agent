@@ -1,0 +1,77 @@
+% !TeX root = ../slides.tex
+% 03-mdp.tex — MDP formulation matching environment/minesweeper_env.py.
+
+\section{MDP Formulation}
+
+\begin{frame}{State and Action Spaces}
+  \twocol{
+    \textbf{Observation} — \texttt{Box(-2, 8, (H, W))}, \texttt{int8}
+    \begin{itemize}
+      \item $-2$: unrevealed cell
+      \item $0..8$: revealed safe cell, mines around it
+      \item mines are \alert{never} exposed to the agent
+    \end{itemize}
+  }{
+    \textbf{Action} — \texttt{Discrete(H $\times$ W)}
+    \begin{itemize}
+      \item action $a \mapsto$ cell $(i, j)$:
+      \item $i = a \operatorname{//} W,\quad j = a \bmod W$
+      \item no flagging, no action masking (v1)
+    \end{itemize}
+  }
+\end{frame}
+
+\begin{frame}{Planned Input Encoding}
+  \twocol{
+    Each cell of the raw observation is mapped to a length-10 one-hot
+    vector \parencite{wang2025minesweepercnn}:
+    \begin{itemize}
+      \item channels $0$–$8$: revealed value;
+      \item channel $9$: unrevealed cell;
+      \item no channel for mines — never observed.
+    \end{itemize}
+    \begin{highlightbox}{Not yet implemented}
+      Encoder \texttt{player\_board} $\to$ tensor $(10, H, W)$ is designed
+      but not built.
+    \end{highlightbox}
+  }{
+    \centering
+    \begin{tikzpicture}
+      \node[mscell, fill=msrevealed, minimum size=1.1cm, font=\Large] (cell) at (0,0) {\msnum{3}};
+      \draw[flowarrow] (cell.east) -- node[midway, above, font=\tiny] {one-hot} ++(1.2,0);
+      \foreach \k in {0,...,9} {
+        \pgfmathsetmacro{\ypos}{2.475-0.55*\k}
+        \ifnum\k=3
+          \node[draw=accentgray, minimum width=1.6cm, minimum height=0.55cm,
+                fill=unipiblue, text=white, font=\bfseries\small] at (2.55,\ypos) {\k};
+        \else
+          \node[draw=accentgray, minimum width=1.6cm, minimum height=0.55cm,
+                fill=lightgray, font=\small] at (2.55,\ypos) {\k};
+        \fi
+      }
+      \node[font=\small] at (2.55,-3.15) {channel index $0..9$};
+    \end{tikzpicture}
+  }
+\end{frame}
+
+\begin{frame}{Reward Function}
+  Adapted from \textcite{wang2025minesweepercnn}, for a board of size
+  $H \times W$:
+  \begin{table}
+    \centering
+    \begin{tabularx}{\textwidth}{l X r}
+      \toprule
+      \textbf{Outcome} & \textbf{Condition} & \textbf{Reward} \\
+      \midrule
+      Win            & all safe cells uncovered        & $+H \cdot W$ \\
+      Loss           & mine selected                   & $-H \cdot W$ \\
+      Progress       & informed safe cell uncovered     & $+1$ \\
+      Guess          & safe cell uncovered blindly      & $-0.5$ \\
+      Already open   & already-revealed cell selected   & $-0.5$ \\
+      \bottomrule
+    \end{tabularx}
+  \end{table}
+  A move counts as a \alert{guess} when every neighboring cell of the
+  selected one is still unrevealed, i.e.\ no local information supported
+  the choice.
+\end{frame}
