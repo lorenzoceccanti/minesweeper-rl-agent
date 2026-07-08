@@ -349,13 +349,17 @@ class DQNAgent:
         return loss.item()
 
     def train(self, n_episodes: int, save_checkpoint: bool = False,
-              checkpoint_dir: str | Path = "checkpoints"):
+              checkpoint_dir: str | Path = "checkpoints",
+              env_seed_start: int | None = None):
         # Log output is an array of strings to be returned to stdout
         # if the log option is set to true
         for episode in tqdm(range(n_episodes)):
-            # Il seed per la board lo imposto una volta sola, sennò
-            # ad ogni episode avrei sempre la stessa board
-            episode_seed = self.seed if episode == 0 else None
+            # each episode will have its own seed, different
+            # from the agent seed.
+            if env_seed_start is None:
+                episode_seed = None
+            else:
+                episode_seed = env_seed_start + episode
             obs, info = self.env.reset(seed=episode_seed)
             terminated = False
             truncated = False
@@ -447,7 +451,7 @@ class DQNAgent:
 
             # Reduce the exploration rate (the self becomes less random over time)
             self.decay_epsilon()
-        if self.save_checkpoint:
+        if save_checkpoint:
             self.last_checkpoint_path = self.save_checkpoint(
                 checkpoint_dir=checkpoint_dir,
             )
