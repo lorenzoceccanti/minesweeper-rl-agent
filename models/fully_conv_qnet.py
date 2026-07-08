@@ -6,8 +6,7 @@ class FullyConvQNetwork(nn.Module):
             input_channels: int = 10,
             hidden_channels: int = 64,
             output_channels: int = 1,
-            kernel_size: tuple[int, int] = (3, 3),
-
+            kernel_size: tuple[int, int] = (3, 3)
         ):
         
         super().__init__()
