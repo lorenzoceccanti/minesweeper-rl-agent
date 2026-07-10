@@ -350,7 +350,7 @@ class DQNAgent:
         return loss.item()
 
     def train(self, n_episodes: int, save_checkpoint: bool = False,
-              checkpoint_dir: str | Path = "checkpoints",
+              checkpoint_dir: str | Path = "checkpoints/dqn",
               env_seed_start: int | None = None):
         # Log output is an array of strings to be returned to stdout
         # if the log option is set to true
