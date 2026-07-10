@@ -178,7 +178,7 @@ class DQNAgent:
 
         # Exploration: choosing a random cell (with probability epsilon)
         if self.rng.random() < self.epsilon:
-            return int(self.env.action_space.sample())
+            return int(self.rng.choice(valid_actions))
 
         # Converting the NumPy board into a PyTorch tensor
         # with shape [H,W]:
