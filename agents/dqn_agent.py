@@ -89,7 +89,7 @@ class DQNAgent:
 
     def save_checkpoint(
             self,
-            checkpoint_dir: str | Path = "checkpoints",
+            checkpoint_dir: str | Path = "checkpoints/dqn",
     ) -> Path:
         
         checkpoint_dir = Path(checkpoint_dir)
@@ -113,6 +113,7 @@ class DQNAgent:
         )
 
         checkpoint = {
+            "algorithm": "dqn",
             # Model
             "online_network_state_dict":
                 self.online_network.state_dict(),
@@ -177,7 +178,7 @@ class DQNAgent:
 
         # Exploration: choosing a random cell (with probability epsilon)
         if self.rng.random() < self.epsilon:
-            return int(self.env.action_space.sample())
+            return int(self.rng.choice(valid_actions))
 
         # Converting the NumPy board into a PyTorch tensor
         # with shape [H,W]:
@@ -349,7 +350,7 @@ class DQNAgent:
         return loss.item()
 
     def train(self, n_episodes: int, save_checkpoint: bool = False,
-              checkpoint_dir: str | Path = "checkpoints",
+              checkpoint_dir: str | Path = "checkpoints/dqn",
               env_seed_start: int | None = None):
         # Log output is an array of strings to be returned to stdout
         # if the log option is set to true

@@ -42,7 +42,7 @@ def one_hot_encode_board(
     # (https://docs.pytorch.org/docs/2.12/generated/torch.nn.functional.one_hot.html)
     # that the tensor returned has shape [*, num_classes]
     
-    class_indices = states.to(dtype=torch.long)
+    class_indices = states.to(dtype=torch.long).clone()
     class_indices[class_indices == -2] = 9 # "THE TRICK"
     
     # Producing the one-hot encoding of states

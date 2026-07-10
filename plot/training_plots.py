@@ -54,13 +54,40 @@ def load_training_metrics(
         weights_only=True,
     )
 
-    required_metrics = (
+    if "algorithm" not in checkpoint:
+        raise KeyError(
+            "Missing 'algorithm' field in checkpoint."
+        )
+
+    algorithm = checkpoint["algorithm"]
+
+    common_metrics = (
         "episode_rewards",
         "episode_lengths",
         "episode_wins",
-        "epsilon_history",
-        "loss_history",
         "training_error",
+    )
+
+    if algorithm == "dqn":
+        algorithm_metrics = (
+            "epsilon_history",
+            "loss_history",
+        )
+
+    elif algorithm == "ppo":
+        algorithm_metrics = (
+            "actor_loss_history",
+            "critic_loss_history",
+        )
+
+    else:
+        raise ValueError(
+            f"Unsupported algorithm: {algorithm}"
+        )
+
+    required_metrics = (
+        common_metrics
+        + algorithm_metrics
     )
 
     missing_metrics = [
@@ -71,14 +98,18 @@ def load_training_metrics(
 
     if missing_metrics:
         raise KeyError(
-            "Missing metrics in checkpoint: "
+            f"Missing metrics in {algorithm.upper()} checkpoint: "
             + ", ".join(missing_metrics)
         )
 
-    return {
-        metric: checkpoint[metric]
-        for metric in required_metrics
+    metrics = {
+        "algorithm": algorithm,
     }
+
+    for metric in required_metrics:
+        metrics[metric] = checkpoint[metric]
+
+    return metrics
 
 def plot_training_from_checkpoint(
     checkpoint_path: str | Path,

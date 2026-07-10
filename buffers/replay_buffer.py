@@ -10,7 +10,7 @@ import numpy as np
 class Transition:
     obs: np.ndarray # Remember: the observation space is a gym.spaces.Box, so a np.ndarray
     action: int # Una delle possibili caselle da cliccare, nello spazio delle azioni è un int
-    reward: int # Le reward possono essere anche floating point
+    reward: float # Le reward possono essere anche floating point
     terminated: bool
     next_obs: np.ndarray
 
