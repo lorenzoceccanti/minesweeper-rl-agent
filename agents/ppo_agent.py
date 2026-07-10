@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 import numpy as np
 import torch
+from tqdm import tqdm
 
 class PPOAgent:
     def __init__(
@@ -437,8 +438,10 @@ class PPOAgent:
         # This counter is useful both for keep track of the episodes
         # elapsed and also for the seed advancement
         completed_episodes = 0
+        tqdm_bar = tqdm(total=n_episodes, desc="Training Progress", unit="episode")
         # At the beginning we reset the episode
         obs, info = self.reset_episode(episode_index = completed_episodes)
+        
 
         while completed_episodes < n_episodes:
     
@@ -467,6 +470,7 @@ class PPOAgent:
                 # in which an episode ends.
                 if terminated or truncated:
                     completed_episodes += 1
+                    tqdm_bar.update(1)
 
                     # We require to reset and make advance the seed
                     # only at the end of the episode, but we continue to put
