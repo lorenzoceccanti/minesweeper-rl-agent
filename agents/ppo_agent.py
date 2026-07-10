@@ -223,48 +223,26 @@ class PPOAgent:
             raise RuntimeError("No valid actions are available.")
         
         # We're not training anything in this function. We're just using
-        # the probability distribution produced by the actor network
+        # the logits produced by the actor network
         # to pick the next action. We can disable the construction of the
         # computational graph
         with torch.no_grad():
             # For how we designed the actor network, the network return
-            # a probability distribution (we have a softmax at the end)
+            # directly the logits
             # NN input: [1, C, H, W]
             # NN output: [1, H*W]
-            probabilities = self.actor(encoded_obs)
-            # applicazione della maschera action_mask
-            # se l'i-esima azione è permessa, i-esimo elemento di action_mask è diverso
-            # da 0 e la probabilità è mantenuta. altrimenti, si azzera.
-            masked_probabilities = probabilities * action_mask
-            
-        # è necessario rinormalizzare: questo perché va garantito che sum_i (p_i) = 1,
-        # per definizione di ddp. la normalizzazione viene fatta solo sulle azioni
-        # valide, quelle con pi > 0
-
-        # significato dei parametri di sum:
-        # a) occorre dim = -1 poiché dobbiamo ricordarci che l'actor
-        # restituisce un tensore di shape [B, H*W].
-        # Noi la sommatoria delle probs vogliamo farla per a = 1, ... numero_azioni.
-        # dim = -1 serve propria a dire questo: non si scorre sull'indice b che
-        # identifica il batch b-esimo.
-        # b) occorre keepdim = True per mantenere la dimensione delle azioni,
-        # altrimenti il tensore avrebbe modificato la propria shape a [B], anzichè
-        # [B, H*W]. Questo perché per ogni stato b dividiamo per un unico numero reale
-        # a comune per tutte le azioni 
-        # che è appunto la somma lungo tutte le a = 1,..., H*W. La somma è un unico
-        # valore reale, e quindi la 2a dimensione [H*W] è persa con l'aggregazione sum().
-        # Mantenere la dimensione significa poi dividere per questo reale per tutte
-        # le a = 1, ..., H*W come si fa nel denominatore di softmax ad esempio.
-            
-        masked_probabilities = (
-            masked_probabilities / masked_probabilities.sum(dim=-1, keepdim=True)
-        )
+            logits = self.actor(encoded_obs)
+            # applicazione della maschera action_mask ai logits
+            masked_logits = logits.masked_fill(
+                ~action_mask,
+                -torch.inf,
+            )
 
         # We need a torch.distributions.Categorical object in order
         # to call the sample method, which is the one responsible for
         # sampling the action later
         distribution = torch.distributions.Categorical(
-            probs = masked_probabilities
+            logits=masked_logits
         )
             
         # Here we effectively sample an action from the policy, with action masking
@@ -392,17 +370,15 @@ class PPOAgent:
                     .flatten(start_dim=1)
                 )
                 
-                # calcolo della nuova log-prob, con le stesse considerazioni viste sopra
-                # per la normalizzazione
-                probabilities = self.actor(encoded_obs)
-                masked_probabilities = probabilities * action_mask
-                masked_probabilities = (
-                    masked_probabilities
-                    / masked_probabilities.sum(dim=-1, keepdim=True)
+                logits = self.actor(encoded_obs)
+                # applicazione della maschera action_mask ai logits
+                masked_logits = logits.masked_fill(
+                    ~action_mask,
+                    -torch.inf,
                 )
 
                 # ricaviamon la distribuzione di probabilità dai p_i
-                distribution = torch.distributions.Categorical(probs=masked_probabilities)
+                distribution = torch.distributions.Categorical(logits=masked_logits)
                 # Log-probabilities of the selected actions under the current policy
                 new_log_probs = distribution.log_prob(actions_tensor)
 

@@ -48,6 +48,5 @@ class ActorNetwork(nn.Module):
         # over the action space. it's a long vector of size H*W.
         # for each element of the vector we expect >= 0
         # and their sum equal to 1. we need a softmax
-        probabilities = torch.softmax(logits, dim=-1)
 
-        return probabilities
+        return logits
