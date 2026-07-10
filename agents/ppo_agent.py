@@ -64,6 +64,15 @@ class PPOAgent:
         self.actor_learning_rate = actor_learning_rate
         self.critic_learning_rate = critic_learning_rate
         # ======================
+
+        # == TRAINING METRICS ==
+        self.episode_rewards = []
+        self.episode_lengths = []
+        self.episode_wins = []
+
+        self.actor_loss_history = []
+        self.critic_loss_history = []
+        self.training_error = []
     
     def save_checkpoint(
             self,
@@ -90,6 +99,9 @@ class PPOAgent:
         )
 
         checkpoint = {
+            "algorithm":
+                "ppo",
+
             "actor_state_dict":
                 self.actor.state_dict(),
 
@@ -107,6 +119,24 @@ class PPOAgent:
 
             "env_seed_start":
                 self.env_seed_start,
+
+            "episode_rewards":
+                self.episode_rewards,
+
+            "episode_lengths":
+                self.episode_lengths,
+
+            "episode_wins":
+                self.episode_wins,
+
+            "actor_loss_history":
+                self.actor_loss_history,
+
+            "critic_loss_history":
+                self.critic_loss_history,
+
+            "training_error":
+                self.training_error,
 
             "hyperparameters": {
                 "max_grad_norm":
@@ -301,6 +331,10 @@ class PPOAgent:
         # fa il pezzo sotto del ppo, che campiona dal rollout buffer, etc.
         # questo metodo è chiamato dalla train
 
+        actor_losses = []
+        critic_losses = []
+        critic_errors = []  
+
         # per K epoche:
         #     per ogni mini-batch casuale:
         #         estrai transizioni, advantage e value target
@@ -388,6 +422,10 @@ class PPOAgent:
                 # che equivale a fare gradient ascent su actor loss
                 actor_loss = -torch.min(not_clipped, clipped).mean()
 
+                actor_losses.append(
+                    actor_loss.item()
+                )
+
                 self.actor_optimizer.zero_grad()
                 actor_loss.backward()
 
@@ -403,6 +441,19 @@ class PPOAgent:
                 # value target tensor ricordiamoci che la TD-one step estimation del return,
                 # pescata dal rollout buffer e sottoforma di tensore.
                 critic_loss = torch.nn.functional.mse_loss(predicted_values, value_targets_tensor)
+                
+                critic_losses.append(
+                    critic_loss.item()
+                )
+
+                with torch.no_grad():
+                    critic_error = torch.mean(
+                        torch.abs(
+                            value_targets_tensor - predicted_values
+                        )
+                    ).item()
+                critic_errors.append(critic_error)
+
                 self.critic_optimizer.zero_grad()
                 critic_loss.backward()
                 torch.nn.utils.clip_grad_norm_(
@@ -411,7 +462,9 @@ class PPOAgent:
                 )
                 self.critic_optimizer.step()
         
-        pass
+        self.actor_loss_history.append(float(np.mean(actor_losses)))
+        self.critic_loss_history.append(float(np.mean(critic_losses)))
+        self.training_error.append(float(np.mean(critic_errors)))
 
     def train(self, n_episodes: int) -> None:
         
@@ -442,6 +495,8 @@ class PPOAgent:
         # At the beginning we reset the episode
         obs, info = self.reset_episode(episode_index = completed_episodes)
         
+        current_episode_reward = 0.0
+        current_episode_length = 0
 
         while completed_episodes < n_episodes:
     
@@ -466,11 +521,34 @@ class PPOAgent:
                 obs = next_obs
                 rollout_steps += 1
 
+                current_episode_reward += float(reward)
+                current_episode_length += 1
+
                 # Checking if we arrive in a terminal state
                 # in which an episode ends.
                 if terminated or truncated:
                     completed_episodes += 1
                     tqdm_bar.update(1)
+
+                    if terminated:
+                        end_reason = info.get("status", "terminated")
+                    else:
+                        end_reason = "truncated"
+
+                    self.episode_rewards.append(
+                        current_episode_reward
+                    )
+
+                    self.episode_lengths.append(
+                        current_episode_length
+                    )
+
+                    self.episode_wins.append(
+                        int(end_reason == "won")
+                    )
+
+                    current_episode_reward = 0.0
+                    current_episode_length = 0
 
                     # We require to reset and make advance the seed
                     # only at the end of the episode, but we continue to put

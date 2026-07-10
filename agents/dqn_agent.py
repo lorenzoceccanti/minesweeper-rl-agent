@@ -113,6 +113,7 @@ class DQNAgent:
         )
 
         checkpoint = {
+            "algorithm": "dqn",
             # Model
             "online_network_state_dict":
                 self.online_network.state_dict(),
