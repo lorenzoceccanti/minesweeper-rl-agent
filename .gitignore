@@ -25,6 +25,7 @@ tmp/
 # Esclude directory di tool vari
 .claude/
 .tokensave/
+.serena/
 
 # LaTeX build output (report/)
 report/build/
