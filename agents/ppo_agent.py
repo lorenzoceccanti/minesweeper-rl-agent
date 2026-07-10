@@ -14,9 +14,14 @@ class PPOAgent:
             device: torch.device,
             seed: int | None,
             env_seed_start: int | None,
+            max_grad_norm: float = 0.5,
             rollout_steps: int = 2048,
             discount_factor: float = 0.95,
             batch_size: int = 64,
+            update_epochs: int = 10,
+            clip_epsilon: float = 0.2,
+            actor_learning_rate: float = 3e-4,
+            critic_learning_rate: float = 3e-4,
             logger = None
         ):
         
@@ -34,14 +39,27 @@ class PPOAgent:
         # == NEURAL NETWORKS == 
         self.actor = actor_net.ActorNetwork().to(self.device)
         self.critic = critic_net.CriticNetwork().to(self.device)
+        self.actor_optimizer = torch.optim.Adam(
+            self.actor.parameters(),
+            lr=actor_learning_rate
+        )
+        self.critic_optimizer = torch.optim.Adam(
+            self.critic.parameters(),
+            lr=critic_learning_rate
+        )
 
         # == ROLLOUT BUFFER ==
         self.rollout_buffer = rollout_buffer.RolloutBuffer()
         self.total_rollout_steps = rollout_steps
 
         # == OTHER PARAMETERS ==
+        self.max_grad_norm = max_grad_norm
         self.batch_size = batch_size
         self.discount_factor = discount_factor
+        self.update_epochs = update_epochs
+        self.clip_epsilon = clip_epsilon
+        self.actor_learning_rate = actor_learning_rate
+        self.critic_learning_rate = critic_learning_rate
         # ======================
     
     def reset_episode(self, episode_index: int):
@@ -183,6 +201,15 @@ class PPOAgent:
 
             advantage = value_target - value
 
+            # Normalizzazione degli advantage, per stabilizzare il training
+            # con una sola transizione si utilizza un rollout non normalizzato,
+            # altrimenti .std() produrrebbe NaN
+            if advantage.numel() > 1:
+                advantage = (
+                    advantage - advantage.mean()
+                ) / (advantage.std() + 1e-8)
+            
+
         # dato che il rollout buffer ha tipi numpy e non pytorch,
         # bisogna ripassare dalla CPU, prima di riconvertire in oggetti numpy
         self.rollout_buffer.set_advantages(advantage.cpu().numpy())
@@ -203,8 +230,105 @@ class PPOAgent:
         #         aggiorna l’actor
         # 
         #         calcola V(s)
-        #         confrontalo con value_target
+        #         confrontalo con value_target, con la MSE loss
         #         aggiorna il critic
+
+
+        for epoch in range(self.update_epochs):
+
+            # ALTRA PARTICOLARITA' di PPO NON VISTA NEL CORSO:
+            # per ciascuna delle epoche quello che si fa in ppo è
+            # - mescolare le transizioni del rollout; 
+            # - dividere le transizioni
+            #   in minibatch (possibilmente della stessa dimensione, fino ad esaurimento del rollout)
+            # - eseguire un aggiornamento dei pesi SU OGNI MINIBATCH
+            # - dopo K epoche, si svuota il buffer
+    
+            minibatches = self.rollout_buffer.sample_minibatches(
+                batch_size=self.batch_size
+            )
+
+            for minibatch in minibatches:
+
+                # === ACTOR === 
+
+                # Ordine di ritorno dei parametri
+                # obs, actions, rewards, terminated, truncated, next_obs, old_log_probs, advantages, value_targets
+                obs, actions, _, _, _, _, old_log_probs, advantages, value_targets = minibatch
+            
+                # Ricordiamo che il formato di salvataggio nel buffer è NumPy, occorre una riconversione
+                # in PyTorch
+                
+                obs_tensor = torch.as_tensor(obs, dtype=torch.long, device=self.device)
+                actions_tensor = torch.as_tensor(actions, dtype=torch.long, device=self.device)
+                
+                old_log_probs_tensor = torch.as_tensor(old_log_probs, dtype=torch.float32, device=self.device)
+                advantages_tensor = torch.as_tensor(advantages, dtype=torch.float32, device=self.device)
+                value_targets_tensor = torch.as_tensor(value_targets, dtype=torch.float32, device=self.device)
+
+                # gli stati prima di essere dati in pasto alle reti neurali devono essere anche one-hot encodati
+                encoded_obs = encodings.one_hot_encode_board(obs_tensor)
+
+                # action masking, come è stato fatto nella get_action sopra
+                action_mask = (
+                    obs_tensor
+                    .eq(-2)
+                    .flatten(start_dim=1)
+                )
+                
+                # calcolo della nuova log-prob, con le stesse considerazioni viste sopra
+                # per la normalizzazione
+                probabilities = self.actor(encoded_obs)
+                masked_probabilities = probabilities * action_mask
+                masked_probabilities = (
+                    masked_probabilities
+                    / masked_probabilities.sum(dim=-1, keepdim=True)
+                )
+
+                # ricaviamon la distribuzione di probabilità dai p_i
+                distribution = torch.distributions.Categorical(probs=masked_probabilities)
+                # Log-probabilities of the selected actions under the current policy
+                new_log_probs = distribution.log_prob(actions_tensor)
+
+                # Pertanto si possono sfruttare le proprietà dei logaritmi per calcolarci il prob. ratio
+                # r = new_policy / old_policy
+                # ma vale anche r = exp(log(new_policy/old_policy))
+                # ma dato che valgono le proprietà dei logaritmi
+                # r = exp(log(new_policy) - log(old_policy))
+                # quindi siamo in grado di ricavarci il probability ratio come segue:
+
+                probability_ratio = torch.exp(new_log_probs - old_log_probs_tensor)
+                clipped = torch.clamp(probability_ratio, min=1-self.clip_epsilon, max=1+self.clip_epsilon)*advantages_tensor
+                not_clipped = probability_ratio*advantages_tensor
+
+                # calcolo la clipped actor loss, il meno davanti perché
+                # fare stiamo facendo una gradient descent su una NLL
+                # che equivale a fare gradient ascent su actor loss
+                actor_loss = -torch.min(not_clipped, clipped).mean()
+
+                self.actor_optimizer.zero_grad()
+                actor_loss.backward()
+
+                # gradient clipping
+                torch.nn.utils.clip_grad_norm_(self.actor.parameters(),
+                            max_norm=self.max_grad_norm)
+            
+                self.actor_optimizer.step()
+
+                # === CRITIC === 
+                # passo gli stati al critic, e il critic restituisce una stima della value function
+                predicted_values = self.critic(encoded_obs)
+                # value target tensor ricordiamoci che la TD-one step estimation del return,
+                # pescata dal rollout buffer e sottoforma di tensore.
+                critic_loss = torch.nn.functional.mse_loss(predicted_values, value_targets_tensor)
+                self.critic_optimizer.zero_grad()
+                critic_loss.backward()
+                torch.nn.utils.clip_grad_norm_(
+                    self.critic.parameters(),
+                    max_norm=self.max_grad_norm
+                )
+                self.critic_optimizer.step()
+        
         pass
 
     def train(self, n_episodes: int) -> None:

@@ -128,22 +128,46 @@ class RolloutBuffer:
             )
         )
     
-    def sample_minibatch(
+    def sample_minibatches(
             self,
             batch_size: int
     ):
-        if batch_size > len(self.buffer):
+        """Randomly shuffles the entire rollout and divides it into minibatches."""
+        if batch_size <= 0:
             raise ValueError(
-                f"Cannot sample {batch_size} transitions from a rollout buffer "
-                f"containing {len(self.buffer)} transitions."
+                "Batch size must be greater than zero."
+            )
+
+        if len(self.buffer) == 0:
+            raise ValueError(
+                "Cannot sample minibatches from an empty rollout buffer."
             )
         
-        minibatch = random.sample(
+        # qua ci sono tutte le transizioni del rollout buffer
+        # mescolate
+        shuffled_transitions = random.sample(
             self.buffer,
-            batch_size,
+            k=len(self.buffer),
         )
 
-        return self._transitions_to_arrays(transitions=minibatch, include_training_values=True)
+        # qui ci verranno messe un numero di transazioni pari a batch_size
+        # per ogni elemento di questa lista.
+        # quindi, primo batch avrà [T3, T1, T4, T9] se per esempio batch_size = 4
+        minibatches = []
+        for start in range(
+            0,
+            len(shuffled_transitions),
+            batch_size
+        ):
+            # da start a batch_size escluso, vengono fatti dei balzi di step batch_size
+            # fino a che non arrivo alla dimensione del rollout buffer (in termini di numero totale
+            # di transizioni)
+            minibatches_transitions = shuffled_transitions[start:start+batch_size]
+            minibatch_arrays = self._transitions_to_arrays(transitions=minibatches_transitions, include_training_values=True)
+
+            minibatches.append(minibatch_arrays)
+        
+        return minibatches
     
     def clear(self) -> None:
         self.buffer.clear()
