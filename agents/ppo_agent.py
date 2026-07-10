@@ -3,6 +3,7 @@ import models.actor_net as actor_net
 import models.critic_net as critic_net
 import buffers.rollout_buffer as rollout_buffer
 import models.encodings as encodings
+from datetime import datetime
 from pathlib import Path
 import numpy as np
 import torch
@@ -29,6 +30,7 @@ class PPOAgent:
         self.env_seed_start = env_seed_start
         self.logger = logger
         self.device = device
+        self.last_checkpoint_path = None
 
         # == ENVIRONMENT == 
         self.env = env
@@ -62,6 +64,85 @@ class PPOAgent:
         self.critic_learning_rate = critic_learning_rate
         # ======================
     
+    def save_checkpoint(
+            self,
+            checkpoint_dir: str | Path = "checkpoints/ppo",
+    ) -> Path:
+
+        checkpoint_dir = Path(checkpoint_dir)
+
+        if not checkpoint_dir.is_absolute():
+            project_root = Path(__file__).resolve().parents[1]
+            checkpoint_dir = project_root / checkpoint_dir
+
+        checkpoint_dir.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        timestamp = datetime.now().strftime(
+            "%Y-%m-%d-%H-%M-%S"
+        )
+
+        checkpoint_path = (
+            checkpoint_dir / f"{timestamp}.pt"
+        )
+
+        checkpoint = {
+            "actor_state_dict":
+                self.actor.state_dict(),
+
+            "critic_state_dict":
+                self.critic.state_dict(),
+
+            "actor_optimizer_state_dict":
+                self.actor_optimizer.state_dict(),
+
+            "critic_optimizer_state_dict":
+                self.critic_optimizer.state_dict(),
+
+            "seed":
+                self.seed,
+
+            "env_seed_start":
+                self.env_seed_start,
+
+            "hyperparameters": {
+                "max_grad_norm":
+                    self.max_grad_norm,
+
+                "rollout_steps":
+                    self.total_rollout_steps,
+
+                "discount_factor":
+                    self.discount_factor,
+
+                "batch_size":
+                    self.batch_size,
+
+                "update_epochs":
+                    self.update_epochs,
+
+                "clip_epsilon":
+                    self.clip_epsilon,
+
+                "actor_learning_rate":
+                    self.actor_learning_rate,
+
+                "critic_learning_rate":
+                    self.critic_learning_rate,
+            },
+        }
+
+        torch.save(
+            checkpoint,
+            checkpoint_path,
+        )
+
+        self.last_checkpoint_path = checkpoint_path
+
+        return checkpoint_path
+
     def reset_episode(self, episode_index: int):
         """ Resets the episode by propering handling the seed
         (due to the misaligment between rollout buffer refreshes

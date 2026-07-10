@@ -89,7 +89,7 @@ class DQNAgent:
 
     def save_checkpoint(
             self,
-            checkpoint_dir: str | Path = "checkpoints",
+            checkpoint_dir: str | Path = "checkpoints/dqn",
     ) -> Path:
         
         checkpoint_dir = Path(checkpoint_dir)
