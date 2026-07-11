@@ -22,6 +22,7 @@ class PPOAgent:
             batch_size: int = 64,
             update_epochs: int = 10,
             clip_epsilon: float = 0.2,
+            entropy_coefficient: float = 0.01,
             actor_learning_rate: float = 3e-4,
             critic_learning_rate: float = 3e-4,
             logger = None
@@ -63,6 +64,7 @@ class PPOAgent:
         self.clip_epsilon = clip_epsilon
         self.actor_learning_rate = actor_learning_rate
         self.critic_learning_rate = critic_learning_rate
+        self.entropy_coefficient = entropy_coefficient
         # ======================
 
         # == TRAINING METRICS ==
@@ -73,6 +75,7 @@ class PPOAgent:
         self.actor_loss_history = []
         self.critic_loss_history = []
         self.training_error = []
+        self.entropy_history = []
     
     def save_checkpoint(
             self,
@@ -138,6 +141,9 @@ class PPOAgent:
             "training_error":
                 self.training_error,
 
+            "entropy_history":
+                self.entropy_history,
+
             "hyperparameters": {
                 "max_grad_norm":
                     self.max_grad_norm,
@@ -156,6 +162,9 @@ class PPOAgent:
 
                 "clip_epsilon":
                     self.clip_epsilon,
+
+                "entropy_coefficient":
+                    self.entropy_coefficient,
 
                 "actor_learning_rate":
                     self.actor_learning_rate,
@@ -312,6 +321,7 @@ class PPOAgent:
         actor_losses = []
         critic_losses = []
         critic_errors = []  
+        entropies = []
 
         # per K epoche:
         #     per ogni mini-batch casuale:
@@ -393,10 +403,27 @@ class PPOAgent:
                 clipped = torch.clamp(probability_ratio, min=1-self.clip_epsilon, max=1+self.clip_epsilon)*advantages_tensor
                 not_clipped = probability_ratio*advantages_tensor
 
+                # Calcoliamo l'entropia della policy corrente: misura l'incertezza/casualità 
+                # delle azioni.
+                entropy = distribution.entropy().mean()
+                entropies.append(entropy.item())
+
                 # calcolo la clipped actor loss, il meno davanti perché
                 # fare stiamo facendo una gradient descent su una NLL
                 # che equivale a fare gradient ascent su actor loss
-                actor_loss = -torch.min(not_clipped, clipped).mean()
+                policy_loss = -torch.min(
+                    not_clipped,
+                    clipped,
+                ).mean()
+
+                # Calcoliamo l'actor loss totale iniettando l'entropy bonus
+                # Nota sul segno (-): dato che l'obiettivo globale è MINIMIZZARE l'actor_loss complessiva, sottrarre l'entropia equivale a MASSIMIZZARLA nel gradiente finale.
+                # Questo spinge l'agente a esplorare maggiormente e previene il collasso prematuro 
+                # della policy verso massimi locali deterministici (subottimali)
+                actor_loss = (
+                    policy_loss
+                    - self.entropy_coefficient * entropy
+                )
 
                 actor_losses.append(
                     actor_loss.item()
@@ -441,6 +468,7 @@ class PPOAgent:
         self.actor_loss_history.append(float(np.mean(actor_losses)))
         self.critic_loss_history.append(float(np.mean(critic_losses)))
         self.training_error.append(float(np.mean(critic_errors)))
+        self.entropy_history.append(float(np.mean(entropies)))
 
     def train(self, n_episodes: int) -> None:
         
