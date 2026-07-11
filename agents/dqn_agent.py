@@ -75,6 +75,7 @@ class DQNAgent:
         self.batch_size = batch_size
 
         # == Parameters
+        self.learning_rate = learning_rate
         self.discount_factor = discount_factor
         self.epsilon = initial_epsilon
         self.epsilon_decay = epsilon_decay
@@ -159,7 +160,13 @@ class DQNAgent:
 
             # Validation
             "validation_history": self.validation_history,
-            "best_validation_win_rate": self.best_validation_win_rate
+            "best_validation_win_rate": self.best_validation_win_rate,
+
+            # Hyperparameters
+            "hyperparameters": {
+                "learning_rate": self.learning_rate,
+                "discount_factor": self.discount_factor,
+            }
         }
 
         torch.save(
@@ -487,7 +494,7 @@ class DQNAgent:
             # di completed_episodes = episode + 1
 
             completed_episodes = episode + 1
-            
+
             if (
                 self.validation_env is not None
                 and self.validation_episodes > 0
@@ -536,6 +543,7 @@ class DQNAgent:
         was_training = self.online_network.training
         # la rete viene messa in evaluation mode
         self.online_network.eval()
+        wins = 0
 
         try:
             # loop di valutazione deterministica su un numero fisso di episodi
