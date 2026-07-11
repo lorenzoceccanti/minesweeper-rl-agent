@@ -16,7 +16,8 @@ class PPOAgent:
             device: torch.device,
             seed: int | None,
             env_seed_start: int | None,
-            max_grad_norm: float = 0.5,
+            max_actor_grad_norm: float = 0.5,
+            max_critic_grad_norm: float = 5.0,
             rollout_steps: int = 2048,
             discount_factor: float = 0.95,
             batch_size: int = 64,
@@ -57,7 +58,8 @@ class PPOAgent:
         self.total_rollout_steps = rollout_steps
 
         # == OTHER PARAMETERS ==
-        self.max_grad_norm = max_grad_norm
+        self.max_actor_grad_norm = max_actor_grad_norm
+        self.max_critic_grad_norm = max_critic_grad_norm
         self.batch_size = batch_size
         self.discount_factor = discount_factor
         self.update_epochs = update_epochs
@@ -145,8 +147,11 @@ class PPOAgent:
                 self.entropy_history,
 
             "hyperparameters": {
-                "max_grad_norm":
-                    self.max_grad_norm,
+                "max_actor_grad_norm":
+                    self.max_actor_grad_norm,
+
+                "max_critic_grad_norm":
+                    self.max_critic_grad_norm,
 
                 "rollout_steps":
                     self.total_rollout_steps,
@@ -434,7 +439,7 @@ class PPOAgent:
 
                 # gradient clipping
                 torch.nn.utils.clip_grad_norm_(self.actor.parameters(),
-                            max_norm=self.max_grad_norm)
+                            max_norm=self.max_actor_grad_norm)
             
                 self.actor_optimizer.step()
 
@@ -461,7 +466,7 @@ class PPOAgent:
                 critic_loss.backward()
                 torch.nn.utils.clip_grad_norm_(
                     self.critic.parameters(),
-                    max_norm=self.max_grad_norm
+                    max_norm=self.max_critic_grad_norm
                 )
                 self.critic_optimizer.step()
         
