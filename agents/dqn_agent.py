@@ -25,7 +25,12 @@ class DQNAgent:
         target_update_frequency: int = 500,
         learning_starts: int = 1_000,
         train_frequency: int = 1,
-        logger = None
+        logger = None,
+        validation_env: gym.Env | None = None,
+        validation_episodes: int = 0,
+        validation_seed_start: int = 500_000,
+        validation_frequency: int = 100,
+        best_checkpoint_dir: str | Path = "checkpoints/dqn/best",
     ):
         self.seed = seed
         self.logger = logger
@@ -84,12 +89,23 @@ class DQNAgent:
         self.epsilon_history = [] # i-th element contains the eps used in the i-th episode
         self.last_checkpoint_path = None
 
+        # == Validation
+        self.validation_env = validation_env
+        self.validation_episodes = validation_episodes
+        self.validation_seed_start = validation_seed_start
+        self.validation_frequency = validation_frequency
+        self.best_checkpoint_dir = best_checkpoint_dir
+        self.validation_history = []
+        self.best_validation_win_rate = -1.0
+        self.best_checkpoint_path = None
+
         # This is the counter of timesteps elapsed
         self.global_step = 0
 
     def save_checkpoint(
             self,
             checkpoint_dir: str | Path = "checkpoints/dqn",
+            filename: str | None = None
     ) -> Path:
         
         checkpoint_dir = Path(checkpoint_dir)
@@ -103,13 +119,15 @@ class DQNAgent:
             parents=True,
             exist_ok=True,
         )
-
-        timestamp = datetime.now().strftime(
-            "%Y-%m-%d-%H-%M-%S"
-        )
+        
+        if filename is None:
+            timestamp = datetime.now().strftime(
+                "%Y-%m-%d-%H-%M-%S"
+            )
+            filename = f"{timestamp}.pt"
 
         checkpoint_path = (
-            checkpoint_dir / f"{timestamp}.pt"
+            checkpoint_dir / filename
         )
 
         checkpoint = {
@@ -138,6 +156,10 @@ class DQNAgent:
             # Gradient update metrics
             "loss_history": self.loss_history,
             "training_error": self.training_error,
+
+            # Validation
+            "validation_history": self.validation_history,
+            "best_validation_win_rate": self.best_validation_win_rate
         }
 
         torch.save(
@@ -145,7 +167,49 @@ class DQNAgent:
             checkpoint_path,
         )
 
+        self.last_checkpoint_path = checkpoint_path
         return checkpoint_path
+
+    def get_greedy_action(self, obs: np.ndarray) -> int:
+        """ Selects the valid action with the highest Q-value.
+        This implementation exploits action masking."""
+
+        obs_tensor = torch.as_tensor(obs, dtype=torch.long, device=self.device)
+        action_mask = (
+            obs_tensor
+            .eq(-2) # we look inside the tensor element, looking for unrevealed cells
+            .flatten() # passing from [H,W] to [H*W]
+            .unsqueeze(0) # we need to add a unitary dimension in front, for how the NN
+            # works
+        )
+
+        if not action_mask.any():
+            raise RuntimeError("No valid actions are available.")
+        
+        # One hot encoding of the observation space
+        # [H, W] -> [1, C, H, W]
+        encoded_obs = encodings.one_hot_encode_board(obs_tensor)
+
+        # Importante: durante l'exploitation (action selection con p = 1-eps)
+        # i q_values sono presi dalla rete con parametri theta, cioè dalla
+        # online network. Però tale online network deve essere utilizzata
+        # in fase di inferenza. Per questo si introduce torch.no_grad: si evita
+        # in questo modo di costruire il grafo computazionale e si risparmia memoria.
+        with torch.no_grad():
+            # [1, 10, H, W] -> [1, H * W]
+            q_values = self.online_network(encoded_obs)
+
+            # THE TRICK: IN ACTION MASKING INVALID ACTIONS RECEIVE Q = -INFINITY.
+            # IN THIS WAY, THEY CANNOT BE SELECTED BY THE ARGMAX
+            masked_q_values = q_values.masked_fill(
+                ~action_mask,
+                -torch.inf,
+            )
+            # [1, H * W] -> scalar action index
+            action = torch.argmax(masked_q_values, dim=1).item()
+        
+        return int(action)
+
 
     def get_action(self, obs: np.ndarray) -> int:
         """
@@ -180,47 +244,11 @@ class DQNAgent:
         if self.rng.random() < self.epsilon:
             return int(self.rng.choice(valid_actions))
 
-        # Converting the NumPy board into a PyTorch tensor
-        # with shape [H,W]:
-        obs_tensor = torch.as_tensor(
-            obs,
-            dtype=torch.long,
-            device=self.device,
-        )
+        # With probability 1-eps, we perform greedy action selection (i.e. argmax of
+        # q_values). We call the function get_greedy_action responsible to
+        # do that part.
 
-        # One hot encoding of the observation space
-        # [H, W] -> [1, C, H, W]
-        encoded_obs = encodings.one_hot_encode_board(obs_tensor)
-
-        # valid_action_mask: [H*W]
-        # valid_action_mask_tensor: [1, H*W]
-        # the unsqueeze is done in order to make coincide
-        # the shape of the action mask with the shape of Q values
-        valid_action_mask_tensor = torch.as_tensor(
-            valid_action_mask,
-            dtype=torch.bool,
-            device=self.device,
-        ).unsqueeze(0)
-
-
-        # Importante: durante l'exploitation (action selection con p = 1-eps)
-        # i q_values sono presi dalla rete con parametri theta, cioè dalla
-        # online network. Però tale online network deve essere utilizzata
-        # in fase di inferenza. Per questo si introduce torch.no_grad: si evita
-        # in questo modo di costruire il grafo computazionale e si risparmia memoria.
-        with torch.no_grad():
-            # [1, 10, H, W] -> [1, H * W]
-            q_values = self.online_network(encoded_obs)
-
-            # THE TRICK: IN ACTION MASKING INVALID ACTIONS RECEIVE Q = -INFINITY.
-            # IN THIS WAY, THEY CANNOT BE SELECTED BY THE ARGMAX
-            masked_q_values = q_values.masked_fill(
-                ~valid_action_mask_tensor,
-                -torch.inf,
-            )
-            # [1, H * W] -> scalar action index
-            action = torch.argmax(masked_q_values, dim=1).item()
-        return int(action)
+        return self.get_greedy_action(obs)
 
     def decay_epsilon(self):
         self.epsilon = max(
@@ -452,6 +480,40 @@ class DQNAgent:
 
             # Reduce the exploration rate (the self becomes less random over time)
             self.decay_epsilon()
+
+            # completed_episodes contiene il numero di episodes COMPLETATI
+            # la validazione la vuoi effettuare al COMPLETAMENTO dell'episode
+            # multiplo di validation_frequency. Questo spiega il perché sull'uso
+            # di completed_episodes = episode + 1
+
+            completed_episodes = episode + 1
+            
+            if (
+                self.validation_env is not None
+                and self.validation_episodes > 0
+                and self.validation_frequency > 0
+                and completed_episodes % self.validation_frequency == 0
+            ):
+                validation_win_rate = self.evaluate_greedy()
+
+                self.validation_history.append({
+                    "episode": completed_episodes,
+                    "global_step": self.global_step,
+                    "win_rate": validation_win_rate,
+                })
+
+                # utilizzando il > anziché >=, in caso di parità
+                # sul win rate si mantiene il primo checkpoint che ha raggiunto
+                # il miglior checkpont.
+
+                if validation_win_rate > self.best_validation_win_rate:
+                    self.best_validation_win_rate = validation_win_rate
+
+                    self.best_checkpoint_path = self.save_checkpoint(
+                        checkpoint_dir=self.best_checkpoint_dir,
+                        filename="best.pt",
+                    )
+
         if save_checkpoint:
             self.last_checkpoint_path = self.save_checkpoint(
                 checkpoint_dir=checkpoint_dir,
@@ -461,3 +523,49 @@ class DQNAgent:
                 f"Checkpoint saved to: "
                 f"{self.last_checkpoint_path}"
             )
+    
+    def evaluate_greedy(self) -> float:
+        """ Evaluates the online network deterministically on the fixed
+        validation board and returns the validation win rate."""
+
+        # verifica che l'ambiente di validazione sia configurato correttamente
+        if self.validation_env is None or self.validation_episodes <= 0:
+            raise RuntimeError("Validation is not configured.")
+
+        # memorizziamo lo stato precedente della online network per ripristinarlo alla fine
+        was_training = self.online_network.training
+        # la rete viene messa in evaluation mode
+        self.online_network.eval()
+
+        try:
+            # loop di valutazione deterministica su un numero fisso di episodi
+            for episode in range(self.validation_episodes):
+                # seed sequenziale per riproducibilità tra i vari checkpoint di validazione
+                obs, info = self.validation_env.reset(
+                    seed=self.validation_seed_start + episode
+                )
+
+                terminated = False
+                truncated = False
+
+                while not (terminated or truncated):
+                    # la conversione one-hot viene fatta dentro la funzione get_greedy_action
+                    # la funzione ritorna direttamente la prossima azione in maniera
+                    # greedy, facendo argmax. inoltre, nella get_greedy_action
+                    # già disabilitiamo la costruzione del computational graph,
+                    # quindi non occorre rifarlo anche qui.
+                    action = self.get_greedy_action(obs)
+
+                    obs, _, terminated, truncated, info = (
+                        self.validation_env.step(action)
+                    )
+
+                wins += int(
+                    terminated
+                    and info.get("status") == "won"
+                )
+
+        finally:
+            self.online_network.train(was_training)
+
+        return wins / self.validation_episodes

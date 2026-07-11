@@ -397,15 +397,15 @@ class PPOAgent:
             # il critic deve approssimare il return: target = V(s_t) + A_t
             value_targets = values + advantages
 
-            if advantage.numel() > 1:
-                advantage = (
-                    advantage - advantage.mean()
-                ) / (advantage.std() + 1e-8)
+            if advantages.numel() > 1:
+                advantages = (
+                    advantages - advantages.mean()
+                ) / (advantages.std() + 1e-8)
             
 
         # dato che il rollout buffer ha tipi numpy e non pytorch,
         # bisogna ripassare dalla CPU, prima di riconvertire in oggetti numpy
-        self.rollout_buffer.set_advantages(advantage.cpu().numpy())
+        self.rollout_buffer.set_advantages(advantages.cpu().numpy())
         self.rollout_buffer.set_value_targets(value_targets.cpu().numpy())
     
     def update(self):
