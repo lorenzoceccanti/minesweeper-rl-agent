@@ -16,15 +16,23 @@ class PPOAgent:
             device: torch.device,
             seed: int | None,
             env_seed_start: int | None,
-            max_grad_norm: float = 0.5,
+            max_actor_grad_norm: float = 0.5,
+            max_critic_grad_norm: float = 5.0,
             rollout_steps: int = 2048,
             discount_factor: float = 0.95,
+            gae_lambda: float = 0.95,
             batch_size: int = 64,
             update_epochs: int = 10,
             clip_epsilon: float = 0.2,
+            entropy_coefficient: float = 0.01,
             actor_learning_rate: float = 3e-4,
             critic_learning_rate: float = 3e-4,
-            logger = None
+            logger = None,
+            validation_env: gym.Env | None = None,
+            validation_episodes: int = 0,
+            validation_seed_start: int = 500_000,
+            validation_frequency: int = 5,
+            best_checkpoint_dir: str | Path = "checkpoints/ppo/best",
         ):
         
         self.seed = seed
@@ -32,6 +40,12 @@ class PPOAgent:
         self.logger = logger
         self.device = device
         self.last_checkpoint_path = None
+        self.best_checkpoint_path = None
+        self.validation_env = validation_env
+        self.validation_episodes = validation_episodes
+        self.validation_seed_start = validation_seed_start
+        self.validation_frequency = validation_frequency
+        self.best_checkpoint_dir = best_checkpoint_dir
 
         # == ENVIRONMENT == 
         self.env = env
@@ -56,13 +70,16 @@ class PPOAgent:
         self.total_rollout_steps = rollout_steps
 
         # == OTHER PARAMETERS ==
-        self.max_grad_norm = max_grad_norm
+        self.max_actor_grad_norm = max_actor_grad_norm
+        self.max_critic_grad_norm = max_critic_grad_norm
         self.batch_size = batch_size
         self.discount_factor = discount_factor
+        self.gae_lambda = gae_lambda
         self.update_epochs = update_epochs
         self.clip_epsilon = clip_epsilon
         self.actor_learning_rate = actor_learning_rate
         self.critic_learning_rate = critic_learning_rate
+        self.entropy_coefficient = entropy_coefficient
         # ======================
 
         # == TRAINING METRICS ==
@@ -73,10 +90,14 @@ class PPOAgent:
         self.actor_loss_history = []
         self.critic_loss_history = []
         self.training_error = []
+        self.entropy_history = []
+        self.validation_history = []
+        self.best_validation_win_rate = -1.0
     
     def save_checkpoint(
             self,
             checkpoint_dir: str | Path = "checkpoints/ppo",
+            filename: str | None = None,
     ) -> Path:
 
         checkpoint_dir = Path(checkpoint_dir)
@@ -90,13 +111,13 @@ class PPOAgent:
             exist_ok=True,
         )
 
-        timestamp = datetime.now().strftime(
-            "%Y-%m-%d-%H-%M-%S"
-        )
+        if filename is None:
+            timestamp = datetime.now().strftime(
+                "%Y-%m-%d-%H-%M-%S"
+            )
+            filename = f"{timestamp}.pt"
 
-        checkpoint_path = (
-            checkpoint_dir / f"{timestamp}.pt"
-        )
+        checkpoint_path = checkpoint_dir / filename
 
         checkpoint = {
             "algorithm":
@@ -138,15 +159,30 @@ class PPOAgent:
             "training_error":
                 self.training_error,
 
+            "entropy_history":
+                self.entropy_history,
+
+            "validation_history":
+                self.validation_history,
+
+            "best_validation_win_rate":
+                self.best_validation_win_rate,
+
             "hyperparameters": {
-                "max_grad_norm":
-                    self.max_grad_norm,
+                "max_actor_grad_norm":
+                    self.max_actor_grad_norm,
+
+                "max_critic_grad_norm":
+                    self.max_critic_grad_norm,
 
                 "rollout_steps":
                     self.total_rollout_steps,
 
                 "discount_factor":
                     self.discount_factor,
+
+                "gae_lambda":
+                    self.gae_lambda,
 
                 "batch_size":
                     self.batch_size,
@@ -156,6 +192,9 @@ class PPOAgent:
 
                 "clip_epsilon":
                     self.clip_epsilon,
+
+                "entropy_coefficient":
+                    self.entropy_coefficient,
 
                 "actor_learning_rate":
                     self.actor_learning_rate,
@@ -185,6 +224,57 @@ class PPOAgent:
             episode_seed = self.env_seed_start + episode_index
 
         return self.env.reset(seed=episode_seed)
+
+    def evaluate_greedy(self) -> float:
+        # verifica che l'ambiente di validazione sia configurato correttamente
+        if self.validation_env is None or self.validation_episodes <= 0:
+            raise RuntimeError("Validation is not configured.")
+
+        # memorizziamo lo stato precedente dell'attore (train/eval) per ripristinarlo alla fine,
+        # impostando la rete in modalità .eval()
+        was_training = self.actor.training
+        self.actor.eval()
+        wins = 0
+
+        try:
+            # loop di valutazione deterministica su un numero fisso di episodi
+            for episode in range(self.validation_episodes):
+                # seed sequenziale per riproducibilità tra i vari checkpoint di validazione
+                obs, info = self.validation_env.reset(
+                    seed=self.validation_seed_start + episode
+                )
+                terminated = False
+                truncated = False
+
+                while not (terminated or truncated):
+                    # conversione in tensore e codifica one-hot dello stato del board
+                    obs_tensor = torch.as_tensor(
+                        obs,
+                        dtype=torch.long,
+                        device=self.device,
+                    )
+                    encoded_obs = encodings.one_hot_encode_board(obs_tensor)
+                    # gestione action masking, analogo a quanto fatto nella get_action
+                    action_mask = obs_tensor.eq(-2).flatten().unsqueeze(0)
+
+                    with torch.no_grad():
+                        logits = self.actor(encoded_obs)
+                        action = logits.masked_fill(
+                            ~action_mask,
+                            -torch.inf,
+                        ).argmax(dim=1).item()
+
+                    obs, _, terminated, truncated, info = self.validation_env.step(
+                        int(action)
+                    )
+                # incrementiamo il contatore se l'episodio è terminato con una vittoria
+                wins += int(terminated and info.get("status") == "won")
+        finally:
+            # ripristino dello stato originale dell'actor
+            self.actor.train(was_training)
+            
+        # restituisce il win-rate medio sugli episodes di validazione
+        return wins / self.validation_episodes
 
     def get_action(self, obs: np.ndarray) -> tuple[int, float]:
         """ Samples an action from the current policy
@@ -258,14 +348,15 @@ class PPOAgent:
 
         # Prendiamo tutte le transactions nel rollout_buffer
 
-        obs, _, rewards, terminateds, _, next_obs, _ = self.rollout_buffer.get_all()
-        # Convertiamo in tensori pytorch: alcuni vanno passati alla rete neurale
-        # critic che lavora su one-hot encoding.
+        obs, _, rewards, terminateds, truncateds, next_obs, _ = self.rollout_buffer.get_all()
         
+        # convertiamo in tensori pytorch: alcuni vanno passati alla rete neurale
+        # critic che lavora su one-hot encoding.
         obs_tensor = torch.as_tensor(obs, dtype=torch.long, device=self.device)
         next_obs_tensor = torch.as_tensor(next_obs, dtype=torch.long, device=self.device)
-        rewards_tensor = torch.as_tensor(rewards, dtype=torch.float32, device=self.device)
-        terminateds_tensor = torch.as_tensor(terminateds, dtype=torch.float32, device=self.device)
+        rewards = torch.as_tensor(rewards, dtype=torch.float32, device=self.device)
+        terminateds = torch.as_tensor(terminateds, dtype=torch.float32, device=self.device)
+        truncateds = torch.as_tensor(truncateds, dtype=torch.float32, device=self.device)
         
         # Producing a one-hot encoding of the observation tensor
         # [H,W] -> [1, C, H, W]
@@ -276,24 +367,36 @@ class PPOAgent:
         # required
         with torch.no_grad():
             
-            value = self.critic(encoded_obs)
-            next_value = self.critic(encoded_next_obs)
+            values = self.critic(encoded_obs)
+            next_values = self.critic(encoded_next_obs)
 
-            # qua si definisce il pezzo del value target
-            # nella formula intera dell'advantage.
-            # viene gestito anche il raggiungimento del terminal state
-            # in unica istruzione, come era stato fatto per DQN
-
-            value_target = (
-                rewards_tensor + self.discount_factor * (1.0 - terminateds_tensor) *
-                next_value
+            # errore di previsione a un passo: δ_t = r_t + γ V(s_{t+1}) - V(s_t)
+            # se l'episodio è realmente terminato, dopo non c'è valore da stimare
+            deltas = (
+                rewards
+                + self.discount_factor * (1 - terminateds) * next_values
+                - values
             )
+            advantages = torch.zeros_like(deltas)
+            gae = 0.0
 
-            advantage = value_target - value
+            # si procede al contrario perché A_t dipende da A_{t+1}
+            for t in reversed(range(len(deltas))):
+                episode_finished = torch.maximum(terminateds[t], truncateds[t])
 
-            # Normalizzazione degli advantage, per stabilizzare il training
-            # con una sola transizione si utilizza un rollout non normalizzato,
-            # altrimenti .std() produrrebbe NaN
+                # A_t = δ_t + γλ(1 - done) A_{t+1}
+                gae = (
+                    deltas[t]
+                    + self.discount_factor
+                    * self.gae_lambda
+                    * (1 - episode_finished)
+                    * gae
+                )
+                advantages[t] = gae
+
+            # il critic deve approssimare il return: target = V(s_t) + A_t
+            value_targets = values + advantages
+
             if advantage.numel() > 1:
                 advantage = (
                     advantage - advantage.mean()
@@ -303,7 +406,7 @@ class PPOAgent:
         # dato che il rollout buffer ha tipi numpy e non pytorch,
         # bisogna ripassare dalla CPU, prima di riconvertire in oggetti numpy
         self.rollout_buffer.set_advantages(advantage.cpu().numpy())
-        self.rollout_buffer.set_value_targets(value_target.cpu().numpy())
+        self.rollout_buffer.set_value_targets(value_targets.cpu().numpy())
     
     def update(self):
         # fa il pezzo sotto del ppo, che campiona dal rollout buffer, etc.
@@ -312,6 +415,7 @@ class PPOAgent:
         actor_losses = []
         critic_losses = []
         critic_errors = []  
+        entropies = []
 
         # per K epoche:
         #     per ogni mini-batch casuale:
@@ -393,10 +497,27 @@ class PPOAgent:
                 clipped = torch.clamp(probability_ratio, min=1-self.clip_epsilon, max=1+self.clip_epsilon)*advantages_tensor
                 not_clipped = probability_ratio*advantages_tensor
 
+                # Calcoliamo l'entropia della policy corrente: misura l'incertezza/casualità 
+                # delle azioni.
+                entropy = distribution.entropy().mean()
+                entropies.append(entropy.item())
+
                 # calcolo la clipped actor loss, il meno davanti perché
                 # fare stiamo facendo una gradient descent su una NLL
                 # che equivale a fare gradient ascent su actor loss
-                actor_loss = -torch.min(not_clipped, clipped).mean()
+                policy_loss = -torch.min(
+                    not_clipped,
+                    clipped,
+                ).mean()
+
+                # Calcoliamo l'actor loss totale iniettando l'entropy bonus
+                # Nota sul segno (-): dato che l'obiettivo globale è MINIMIZZARE l'actor_loss complessiva, sottrarre l'entropia equivale a MASSIMIZZARLA nel gradiente finale.
+                # Questo spinge l'agente a esplorare maggiormente e previene il collasso prematuro 
+                # della policy verso massimi locali deterministici (subottimali)
+                actor_loss = (
+                    policy_loss
+                    - self.entropy_coefficient * entropy
+                )
 
                 actor_losses.append(
                     actor_loss.item()
@@ -407,7 +528,7 @@ class PPOAgent:
 
                 # gradient clipping
                 torch.nn.utils.clip_grad_norm_(self.actor.parameters(),
-                            max_norm=self.max_grad_norm)
+                            max_norm=self.max_actor_grad_norm)
             
                 self.actor_optimizer.step()
 
@@ -434,13 +555,14 @@ class PPOAgent:
                 critic_loss.backward()
                 torch.nn.utils.clip_grad_norm_(
                     self.critic.parameters(),
-                    max_norm=self.max_grad_norm
+                    max_norm=self.max_critic_grad_norm
                 )
                 self.critic_optimizer.step()
         
         self.actor_loss_history.append(float(np.mean(actor_losses)))
         self.critic_loss_history.append(float(np.mean(critic_losses)))
         self.training_error.append(float(np.mean(critic_errors)))
+        self.entropy_history.append(float(np.mean(entropies)))
 
     def train(self, n_episodes: int) -> None:
         
@@ -467,6 +589,7 @@ class PPOAgent:
         # This counter is useful both for keep track of the episodes
         # elapsed and also for the seed advancement
         completed_episodes = 0
+        rollout_index = 0
         tqdm_bar = tqdm(total=n_episodes, desc="Training Progress", unit="episode")
         # At the beginning we reset the episode
         obs, info = self.reset_episode(episode_index = completed_episodes)
@@ -538,6 +661,28 @@ class PPOAgent:
             
             # K EPOCHS OF PPO UPDATE
             self.update()
-            
+
+            rollout_index += 1
+            # controllo periodico per la greedy evaluation del modello
+            if (
+                self.validation_env is not None
+                and self.validation_episodes > 0
+                and rollout_index % self.validation_frequency == 0
+            ):
+                validation_win_rate = self.evaluate_greedy()
+                self.validation_history.append({
+                    "rollout": rollout_index,
+                    "win_rate": validation_win_rate,
+                })
+
+                # se il win rate corrente supera il massimo storico 
+                # aggiorna il record e salva i pesi attuali come best model
+                if validation_win_rate > self.best_validation_win_rate:
+                    self.best_validation_win_rate = validation_win_rate
+                    self.best_checkpoint_path = self.save_checkpoint(
+                        checkpoint_dir=self.best_checkpoint_dir,
+                        filename="best.pt",
+                    )
+
             # INVALIDATING THE ROLLOUT BUFFER AFTER PPO UPDATE
             self.rollout_buffer.clear()
