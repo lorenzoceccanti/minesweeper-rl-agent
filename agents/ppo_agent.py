@@ -20,6 +20,7 @@ class PPOAgent:
             max_critic_grad_norm: float = 5.0,
             rollout_steps: int = 2048,
             discount_factor: float = 0.95,
+            gae_lambda: float = 0.95,
             batch_size: int = 64,
             update_epochs: int = 10,
             clip_epsilon: float = 0.2,
@@ -62,6 +63,7 @@ class PPOAgent:
         self.max_critic_grad_norm = max_critic_grad_norm
         self.batch_size = batch_size
         self.discount_factor = discount_factor
+        self.gae_lambda = gae_lambda
         self.update_epochs = update_epochs
         self.clip_epsilon = clip_epsilon
         self.actor_learning_rate = actor_learning_rate
@@ -158,6 +160,9 @@ class PPOAgent:
 
                 "discount_factor":
                     self.discount_factor,
+
+                "gae_lambda":
+                    self.gae_lambda,
 
                 "batch_size":
                     self.batch_size,
@@ -272,14 +277,15 @@ class PPOAgent:
 
         # Prendiamo tutte le transactions nel rollout_buffer
 
-        obs, _, rewards, terminateds, _, next_obs, _ = self.rollout_buffer.get_all()
-        # Convertiamo in tensori pytorch: alcuni vanno passati alla rete neurale
-        # critic che lavora su one-hot encoding.
+        obs, _, rewards, terminateds, truncateds, next_obs, _ = self.rollout_buffer.get_all()
         
+        # convertiamo in tensori pytorch: alcuni vanno passati alla rete neurale
+        # critic che lavora su one-hot encoding.
         obs_tensor = torch.as_tensor(obs, dtype=torch.long, device=self.device)
         next_obs_tensor = torch.as_tensor(next_obs, dtype=torch.long, device=self.device)
-        rewards_tensor = torch.as_tensor(rewards, dtype=torch.float32, device=self.device)
-        terminateds_tensor = torch.as_tensor(terminateds, dtype=torch.float32, device=self.device)
+        rewards = torch.as_tensor(rewards, dtype=torch.float32, device=self.device)
+        terminateds = torch.as_tensor(terminateds, dtype=torch.float32, device=self.device)
+        truncateds = torch.as_tensor(truncateds, dtype=torch.float32, device=self.device)
         
         # Producing a one-hot encoding of the observation tensor
         # [H,W] -> [1, C, H, W]
@@ -290,24 +296,36 @@ class PPOAgent:
         # required
         with torch.no_grad():
             
-            value = self.critic(encoded_obs)
-            next_value = self.critic(encoded_next_obs)
+            values = self.critic(encoded_obs)
+            next_values = self.critic(encoded_next_obs)
 
-            # qua si definisce il pezzo del value target
-            # nella formula intera dell'advantage.
-            # viene gestito anche il raggiungimento del terminal state
-            # in unica istruzione, come era stato fatto per DQN
-
-            value_target = (
-                rewards_tensor + self.discount_factor * (1.0 - terminateds_tensor) *
-                next_value
+            # errore di previsione a un passo: δ_t = r_t + γ V(s_{t+1}) - V(s_t)
+            # se l'episodio è realmente terminato, dopo non c'è valore da stimare
+            deltas = (
+                rewards
+                + self.discount_factor * (1 - terminateds) * next_values
+                - values
             )
+            advantages = torch.zeros_like(deltas)
+            gae = 0.0
 
-            advantage = value_target - value
+            # si procede al contrario perché A_t dipende da A_{t+1}
+            for t in reversed(range(len(deltas))):
+                episode_finished = torch.maximum(terminateds[t], truncateds[t])
 
-            # Normalizzazione degli advantage, per stabilizzare il training
-            # con una sola transizione si utilizza un rollout non normalizzato,
-            # altrimenti .std() produrrebbe NaN
+                # A_t = δ_t + γλ(1 - done) A_{t+1}
+                gae = (
+                    deltas[t]
+                    + self.discount_factor
+                    * self.gae_lambda
+                    * (1 - episode_finished)
+                    * gae
+                )
+                advantages[t] = gae
+
+            # il critic deve approssimare il return: target = V(s_t) + A_t
+            value_targets = values + advantages
+
             if advantage.numel() > 1:
                 advantage = (
                     advantage - advantage.mean()
@@ -317,7 +335,7 @@ class PPOAgent:
         # dato che il rollout buffer ha tipi numpy e non pytorch,
         # bisogna ripassare dalla CPU, prima di riconvertire in oggetti numpy
         self.rollout_buffer.set_advantages(advantage.cpu().numpy())
-        self.rollout_buffer.set_value_targets(value_target.cpu().numpy())
+        self.rollout_buffer.set_value_targets(value_targets.cpu().numpy())
     
     def update(self):
         # fa il pezzo sotto del ppo, che campiona dal rollout buffer, etc.
