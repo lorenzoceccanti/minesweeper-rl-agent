@@ -27,7 +27,12 @@ class PPOAgent:
             entropy_coefficient: float = 0.01,
             actor_learning_rate: float = 3e-4,
             critic_learning_rate: float = 3e-4,
-            logger = None
+            logger = None,
+            validation_env: gym.Env | None = None,
+            validation_episodes: int = 0,
+            validation_seed_start: int = 500_000,
+            validation_frequency: int = 5,
+            best_checkpoint_dir: str | Path = "checkpoints/ppo/best",
         ):
         
         self.seed = seed
@@ -35,6 +40,12 @@ class PPOAgent:
         self.logger = logger
         self.device = device
         self.last_checkpoint_path = None
+        self.best_checkpoint_path = None
+        self.validation_env = validation_env
+        self.validation_episodes = validation_episodes
+        self.validation_seed_start = validation_seed_start
+        self.validation_frequency = validation_frequency
+        self.best_checkpoint_dir = best_checkpoint_dir
 
         # == ENVIRONMENT == 
         self.env = env
@@ -80,10 +91,13 @@ class PPOAgent:
         self.critic_loss_history = []
         self.training_error = []
         self.entropy_history = []
+        self.validation_history = []
+        self.best_validation_win_rate = -1.0
     
     def save_checkpoint(
             self,
             checkpoint_dir: str | Path = "checkpoints/ppo",
+            filename: str | None = None,
     ) -> Path:
 
         checkpoint_dir = Path(checkpoint_dir)
@@ -97,13 +111,13 @@ class PPOAgent:
             exist_ok=True,
         )
 
-        timestamp = datetime.now().strftime(
-            "%Y-%m-%d-%H-%M-%S"
-        )
+        if filename is None:
+            timestamp = datetime.now().strftime(
+                "%Y-%m-%d-%H-%M-%S"
+            )
+            filename = f"{timestamp}.pt"
 
-        checkpoint_path = (
-            checkpoint_dir / f"{timestamp}.pt"
-        )
+        checkpoint_path = checkpoint_dir / filename
 
         checkpoint = {
             "algorithm":
@@ -147,6 +161,12 @@ class PPOAgent:
 
             "entropy_history":
                 self.entropy_history,
+
+            "validation_history":
+                self.validation_history,
+
+            "best_validation_win_rate":
+                self.best_validation_win_rate,
 
             "hyperparameters": {
                 "max_actor_grad_norm":
@@ -204,6 +224,57 @@ class PPOAgent:
             episode_seed = self.env_seed_start + episode_index
 
         return self.env.reset(seed=episode_seed)
+
+    def evaluate_greedy(self) -> float:
+        # verifica che l'ambiente di validazione sia configurato correttamente
+        if self.validation_env is None or self.validation_episodes <= 0:
+            raise RuntimeError("Validation is not configured.")
+
+        # memorizziamo lo stato precedente dell'attore (train/eval) per ripristinarlo alla fine,
+        # impostando la rete in modalità .eval()
+        was_training = self.actor.training
+        self.actor.eval()
+        wins = 0
+
+        try:
+            # loop di valutazione deterministica su un numero fisso di episodi
+            for episode in range(self.validation_episodes):
+                # seed sequenziale per riproducibilità tra i vari checkpoint di validazione
+                obs, info = self.validation_env.reset(
+                    seed=self.validation_seed_start + episode
+                )
+                terminated = False
+                truncated = False
+
+                while not (terminated or truncated):
+                    # conversione in tensore e codifica one-hot dello stato del board
+                    obs_tensor = torch.as_tensor(
+                        obs,
+                        dtype=torch.long,
+                        device=self.device,
+                    )
+                    encoded_obs = encodings.one_hot_encode_board(obs_tensor)
+                    # gestione action masking, analogo a quanto fatto nella get_action
+                    action_mask = obs_tensor.eq(-2).flatten().unsqueeze(0)
+
+                    with torch.no_grad():
+                        logits = self.actor(encoded_obs)
+                        action = logits.masked_fill(
+                            ~action_mask,
+                            -torch.inf,
+                        ).argmax(dim=1).item()
+
+                    obs, _, terminated, truncated, info = self.validation_env.step(
+                        int(action)
+                    )
+                # incrementiamo il contatore se l'episodio è terminato con una vittoria
+                wins += int(terminated and info.get("status") == "won")
+        finally:
+            # ripristino dello stato originale dell'actor
+            self.actor.train(was_training)
+            
+        # restituisce il win-rate medio sugli episodes di validazione
+        return wins / self.validation_episodes
 
     def get_action(self, obs: np.ndarray) -> tuple[int, float]:
         """ Samples an action from the current policy
@@ -518,6 +589,7 @@ class PPOAgent:
         # This counter is useful both for keep track of the episodes
         # elapsed and also for the seed advancement
         completed_episodes = 0
+        rollout_index = 0
         tqdm_bar = tqdm(total=n_episodes, desc="Training Progress", unit="episode")
         # At the beginning we reset the episode
         obs, info = self.reset_episode(episode_index = completed_episodes)
@@ -589,6 +661,28 @@ class PPOAgent:
             
             # K EPOCHS OF PPO UPDATE
             self.update()
-            
+
+            rollout_index += 1
+            # controllo periodico per la greedy evaluation del modello
+            if (
+                self.validation_env is not None
+                and self.validation_episodes > 0
+                and rollout_index % self.validation_frequency == 0
+            ):
+                validation_win_rate = self.evaluate_greedy()
+                self.validation_history.append({
+                    "rollout": rollout_index,
+                    "win_rate": validation_win_rate,
+                })
+
+                # se il win rate corrente supera il massimo storico 
+                # aggiorna il record e salva i pesi attuali come best model
+                if validation_win_rate > self.best_validation_win_rate:
+                    self.best_validation_win_rate = validation_win_rate
+                    self.best_checkpoint_path = self.save_checkpoint(
+                        checkpoint_dir=self.best_checkpoint_dir,
+                        filename="best.pt",
+                    )
+
             # INVALIDATING THE ROLLOUT BUFFER AFTER PPO UPDATE
             self.rollout_buffer.clear()
