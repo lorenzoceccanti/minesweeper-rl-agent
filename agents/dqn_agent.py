@@ -191,7 +191,7 @@ class DQNAgent:
 
         base_env = env.unwrapped
         return float (
-            base_env.num_mines / (
+            base_env.n_mines / (
                 base_env.board_height * base_env.board_width
             )
         )
@@ -333,7 +333,7 @@ class DQNAgent:
         mine_densities_tensor = torch.as_tensor(
             mine_densities,
             dtype=torch.float32,
-            device=self.devices
+            device=self.device
         )
 
         # [batch_size, H, W] -> [batch_size, H * W]

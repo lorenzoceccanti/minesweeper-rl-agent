@@ -9,6 +9,7 @@ class RolloutTransition:
     terminated: bool
     truncated: bool
     next_obs: np.ndarray
+    mine_density: float
     # We require to store the old
     # logits. Otherwise we don't have it
     # when the actor weights are updating
@@ -61,6 +62,7 @@ class RolloutBuffer:
         truncateds_list = []
         next_obs_list = []
         old_log_probs_list = []
+        mine_densities_list = []
         advantage_list = []
         value_targets_list = []
 
@@ -72,6 +74,7 @@ class RolloutBuffer:
             truncateds_list.append(transition.truncated)
             next_obs_list.append(transition.next_obs)
             old_log_probs_list.append(transition.old_log_prob)
+            mine_densities_list.append(transition.mine_density)
 
             if include_training_values:
                 if (transition.advantage is None or transition.value_target is None):
@@ -96,13 +99,14 @@ class RolloutBuffer:
             old_log_probs_list,
             dtype=np.float32
         )
+        mine_densities = np.asarray(mine_densities_list, dtype=np.float32)
 
         if include_training_values:
             advantages = np.asarray(advantage_list, dtype=np.float32)
             value_targets = np.asarray(value_targets_list, dtype=np.float32)
-            return obs, actions, rewards, terminateds, truncateds, next_obs, old_log_probs, advantages, value_targets
+            return obs, actions, rewards, terminateds, truncateds, next_obs, old_log_probs, mine_densities, advantages, value_targets
         else:
-            return obs, actions, rewards, terminateds, truncateds, next_obs, old_log_probs
+            return obs, actions, rewards, terminateds, truncateds, next_obs, old_log_probs, mine_densities
 
     def push(
             self,
@@ -112,7 +116,8 @@ class RolloutBuffer:
             terminated: bool,
             truncated: bool,
             next_obs: np.ndarray,
-            old_log_prob: float
+            old_log_prob: float,
+            mine_density: float
     ) -> None:
         # Nota: passaggio per copia degli stati, stesso motivo per cui
         # si era fatto anche nel replay buffer.
@@ -124,7 +129,8 @@ class RolloutBuffer:
                 terminated=terminated,
                 truncated=truncated,
                 next_obs=np.array(next_obs, copy=True),
-                old_log_prob=old_log_prob
+                old_log_prob=old_log_prob,
+                mine_density=float(mine_density)
             )
         )
     
