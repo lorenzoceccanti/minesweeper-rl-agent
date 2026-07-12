@@ -177,9 +177,28 @@ class DQNAgent:
         self.last_checkpoint_path = checkpoint_path
         return checkpoint_path
 
-    def get_greedy_action(self, obs: np.ndarray) -> int:
+    def get_mine_density(self, env: gym.Env) -> float:
+        """ Helper function used to compute the mine density
+        from the environment"""
+        # We'll call it after each env.reset() for support
+        # at future implementations that may involve
+        # a dynamically increasing number of mines in the environment
+
+        # the unwrapped reference of the environment ensures
+        # to expose correctly the constructor field of our MinesweeperEnv
+        # this might be useful if the caller has used some wrappers
+        # to block the timesteps at a maximum number of iterations
+
+        base_env = env.unwrapped
+        return float (
+            base_env.num_mines / (
+                base_env.board_height * base_env.board_width
+            )
+        )
+
+    def get_greedy_action(self, obs: np.ndarray, mine_density: float) -> int:
         """ Selects the valid action with the highest Q-value.
-        This implementation exploits action masking."""
+        This implementation exploits action masking and the idea of mine density"""
 
         obs_tensor = torch.as_tensor(obs, dtype=torch.long, device=self.device)
         action_mask = (
@@ -195,7 +214,7 @@ class DQNAgent:
         
         # One hot encoding of the observation space
         # [H, W] -> [1, C, H, W]
-        encoded_obs = encodings.one_hot_encode_board(obs_tensor)
+        encoded_obs = encodings.one_hot_encode_board(obs_tensor, mine_density)
 
         # Importante: durante l'exploitation (action selection con p = 1-eps)
         # i q_values sono presi dalla rete con parametri theta, cioè dalla
@@ -203,7 +222,7 @@ class DQNAgent:
         # in fase di inferenza. Per questo si introduce torch.no_grad: si evita
         # in questo modo di costruire il grafo computazionale e si risparmia memoria.
         with torch.no_grad():
-            # [1, 10, H, W] -> [1, H * W]
+            # [1, 11, H, W] -> [1, H * W]
             q_values = self.online_network(encoded_obs)
 
             # THE TRICK: IN ACTION MASKING INVALID ACTIONS RECEIVE Q = -INFINITY.
@@ -218,7 +237,7 @@ class DQNAgent:
         return int(action)
 
 
-    def get_action(self, obs: np.ndarray) -> int:
+    def get_action(self, obs: np.ndarray, mine_density: float) -> int:
         """
         Selects an action using an epsilon-greedy policy.
         This implementation performs action masking, in order
@@ -255,7 +274,7 @@ class DQNAgent:
         # q_values). We call the function get_greedy_action responsible to
         # do that part.
 
-        return self.get_greedy_action(obs)
+        return self.get_greedy_action(obs, mine_density)
 
     def decay_epsilon(self):
         self.epsilon = max(
@@ -277,7 +296,7 @@ class DQNAgent:
         if len(self.replay_buffer) < self.batch_size:
             return None
 
-        obs, actions, rewards, terminateds, next_obs = self.replay_buffer.sample(
+        obs, actions, rewards, terminateds, next_obs, mine_densities = self.replay_buffer.sample(
             self.batch_size
         )
 
@@ -311,6 +330,12 @@ class DQNAgent:
             device=self.device,
         )
 
+        mine_densities_tensor = torch.as_tensor(
+            mine_densities,
+            dtype=torch.float32,
+            device=self.devices
+        )
+
         # [batch_size, H, W] -> [batch_size, H * W]
         next_valid_action_mask = (
             next_obs_tensor
@@ -318,8 +343,8 @@ class DQNAgent:
             .flatten(start_dim=1)
         )
 
-        obs = encodings.one_hot_encode_board(obs_tensor)
-        next_obs = encodings.one_hot_encode_board(next_obs_tensor)
+        obs = encodings.one_hot_encode_board(obs_tensor, mine_densities_tensor)
+        next_obs = encodings.one_hot_encode_board(next_obs_tensor, mine_densities_tensor)
 
         # Prendo i Q-values dati dalla online_network, relativamente
         # ad ognuno degli stati presenti nel minibatch (sono dentro al tensore obs)
@@ -397,6 +422,7 @@ class DQNAgent:
             else:
                 episode_seed = env_seed_start + episode
             obs, info = self.env.reset(seed=episode_seed)
+            mine_density = self.get_mine_density(self.env)
             terminated = False
             truncated = False
 
@@ -405,7 +431,7 @@ class DQNAgent:
 
             while not (terminated or truncated):
                 # Choosing an action using eps-greedy
-                action = self.get_action(obs)
+                action = self.get_action(obs, mine_density)
                 # Take action, observe reward and next state from the environment
                 next_obs, reward, terminated, truncated, info = self.env.step(action)
 
@@ -441,7 +467,8 @@ class DQNAgent:
                     action=action,
                     reward=reward,
                     terminated=terminated,
-                    next_obs=next_obs
+                    next_obs=next_obs,
+                    mine_density=mine_density
                 )
 
                 # Increment by one the counter of timesteps by one
@@ -552,6 +579,7 @@ class DQNAgent:
                 obs, info = self.validation_env.reset(
                     seed=self.validation_seed_start + episode
                 )
+                mine_density = self.get_mine_density(self.validation_env)
 
                 terminated = False
                 truncated = False
@@ -562,7 +590,7 @@ class DQNAgent:
                     # greedy, facendo argmax. inoltre, nella get_greedy_action
                     # già disabilitiamo la costruzione del computational graph,
                     # quindi non occorre rifarlo anche qui.
-                    action = self.get_greedy_action(obs)
+                    action = self.get_greedy_action(obs, mine_density)
 
                     obs, _, terminated, truncated, info = (
                         self.validation_env.step(action)

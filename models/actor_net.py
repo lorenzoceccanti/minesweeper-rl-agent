@@ -7,7 +7,7 @@ class ActorNetwork(nn.Module):
     the action space A."""
     def __init__(
             self,
-            input_channels: int = 10,
+            input_channels: int = 11,
             hidden_channels: int = 64,
             output_channels: int = 1,
             kernel_size: tuple[int, int] = (3, 3)
@@ -19,7 +19,7 @@ class ActorNetwork(nn.Module):
         padding_size = tuple(k // 2 for k in kernel_size)
 
         self.network = nn.Sequential(
-            #1) [B, 10, H, W] -> [B, 64, H, W]
+            #1) [B, 10+1, H, W] -> [B, 64, H, W]
             nn.Conv2d(in_channels=input_channels, out_channels=hidden_channels, 
                       kernel_size=kernel_size, padding=padding_size, stride=1),
             nn.ReLU(),

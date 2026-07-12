@@ -13,6 +13,8 @@ class Transition:
     reward: float # Le reward possono essere anche floating point
     terminated: bool
     next_obs: np.ndarray
+    mine_density: float # viene salvata anche mine_density per future implementazioni
+    # in cui il numero di mine della board può cambiare nel tempo
 
 class ReplayBuffer:
     
@@ -35,7 +37,8 @@ class ReplayBuffer:
             action: int,
             reward: float,
             terminated: bool,
-            next_obs: np.ndarray
+            next_obs: np.ndarray,
+            mine_density: float
     ) -> None:
         self.buffer.append(
             Transition(
@@ -43,7 +46,8 @@ class ReplayBuffer:
                 action=action,
                 reward=reward,
                 terminated=terminated,
-                next_obs=np.array(next_obs, copy=True)
+                next_obs=np.array(next_obs, copy=True),
+                mine_density=float(mine_density)
             )
         )
 
@@ -65,6 +69,7 @@ class ReplayBuffer:
         rewards_list = []
         terminateds_list = []
         next_obs_list = []
+        mine_densities_list = []
 
         for t in batch:
             obs_list.append(t.obs)
@@ -72,6 +77,7 @@ class ReplayBuffer:
             rewards_list.append(t.reward)
             terminateds_list.append(t.terminated)
             next_obs_list.append(t.next_obs)
+            mine_densities_list.append(t.mine_density)
 
         # obs_list is a list made of batch_size elements
         # [H,W]. By stacking batch_size observations we produce
@@ -83,8 +89,9 @@ class ReplayBuffer:
         actions = np.asarray(actions_list, dtype=np.int64)
         rewards = np.asarray(rewards_list, dtype=np.float32)
         terminateds = np.asarray(terminateds_list, dtype=np.bool_)
+        mine_densities = np.asarray(mine_densities_list, dtype=np.float32)
 
-        return obs, actions, rewards, terminateds, next_obs
+        return obs, actions, rewards, terminateds, next_obs, mine_densities
 
     def __len__(self):
         return len(self.buffer)
