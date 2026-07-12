@@ -242,7 +242,7 @@ class Game:
                     
                     # Adding to the stack a neighbor
                     cells_to_visit.append((neighbor_i, neighbor_j))
-        
+        return newly_opened_cells
     
 
     def print_board(self):
