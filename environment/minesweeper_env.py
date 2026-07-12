@@ -78,18 +78,29 @@ class MinesweeperEnv(gym.Env):
         )
 
         # Definition of the rewards
-        # according to Wenbo Wang et. al, 2025
-        self.R_win = self.board_width * self.board_height # win the game
-        self.R_lose = -(self.board_width * self.board_height) # find a mine
-        self.R_progress = 1 # uncovering a safe cell
-        self.R_guess = -0.5 # random guessing: the cell uncovered was safe, but all neighb. cells are undisclosed yet
-        self.R_already_open = -0.5 # choosing an already revealed cell
+
+        # computing S, number of safe cells in the board
+        # S = board_height * board_width - n_mines
+        self.n_safe_cells = self.board_height * self.board_width - self.n_mines
+        if self.n_safe_cells <= 0:
+            raise ValueError(
+                "The board must contain at least one safe cell"
+            )
+
+        self.R_win = +1 # bonus for winning the game
+        self.R_lose = -1 # find a mine
+
+        # normalized penalties
+        # choosing an already revealed cell, normalized (questo non può mai avvenire grazie all'action masking
+        # ma lo scegliamo di mantenere per salvaguardia)
+        self.R_already_open = -0.5/self.n_safe_cells 
+        # random guessing: the cell uncovered was safe, but all neighb. cells are undisclosed yet (normalized)
+        # essendo una penalty andrà usata come tale, quindi non ci si mette il segno meno
+        self.R_guess_penalty = 1.5/self.n_safe_cells
 
         # We have a dictionary containing the stats about
         # the game played
 
-        # TODO: pensare a come salvare i casi sfortunati,
-        # e a come rappresentare il numero di timesteps per episode
         self.stats = {
             "n_win": 0,
             "n_lose": 0,
@@ -201,6 +212,9 @@ class MinesweeperEnv(gym.Env):
         if self.game.is_safe_cell_discovered(i, j):
             reward = self.R_already_open
             self.info["status"] = "no_progress"
+            # il fatto che l'agente selezioni una cella già aperta non dipende
+            # dal flood fill.
+            self.info["delta_n_t"] = 0
             self.stats["num_no_progress"] += 1
         else:
             # We have to discriminate if we have
@@ -213,6 +227,7 @@ class MinesweeperEnv(gym.Env):
                 reward = self.R_lose
                 self.done = True
                 self.info["status"] = "lost"
+                self.info["delta_n_t"] = 0
 
                 self.stats["n_lose"] += 1
                 self.stats["n_episodes"] += 1
@@ -222,26 +237,48 @@ class MinesweeperEnv(gym.Env):
                 # or not.
                 was_guess = self.game.is_random_guess(i, j)
                 # Reveal the selected safe cell and its connected empty region
-                self.game.uncover_cell(i, j)
+                # also pick the delta_n_t, the number of cells opened during flood fill
+                delta_n_t = self.game.uncover_cell(i, j)
                 # Victory must be checked after uncovering the cells
                 status = self.game.check_game_status(i, j)
                 # Situation 3: all the safe cells have now been revealed: victory!
                 if status == 1:
-                    reward = self.R_win
+                    # reward nel caso di vittoria: va distinto il caso fortunato
+                    # da quello ragionato
+                    if was_guess:
+                        # caso fortunato: vittoria con azione guess
+                        reward = (
+                            self.R_win +
+                            delta_n_t / self.n_safe_cells
+                            - self.R_guess_penalty
+                        )
+                    else:
+                        # caso ragionato: non attribuiamo all'agente la penalità guess
+                        reward = (
+                            self.R_win +
+                            delta_n_t / self.n_safe_cells
+                        )
                     self.done = True
                     self.info["status"] = "won"
                     self.stats["n_win"] += 1
                     self.stats["n_episodes"] += 1
                 # Situation 4: safe cell guessed by chance
                 elif was_guess:
-                    reward = self.R_guess
+                    # la reward, se presa una cella sicura "a caso", deve tenere
+                    # conto del numero di celle aperte dal flood fill
+                    reward = (
+                        delta_n_t / self.n_safe_cells
+                        - self.R_guess_penalty
+                    )
                     self.info["status"] = "guess"
                     self.stats["num_guess"] += 1
                 # Situation 5: safe cell selected near numbered cell: intelligent progression
                 else:
-                    reward = self.R_progress
+                    reward = delta_n_t / self.n_safe_cells
                     self.info["status"] = "progress"
                     self.stats["num_progress"] += 1
+                self.info["delta_n_t"] = delta_n_t
+                self.info["was_guess"] = was_guess
 
         # Preparing the next state and the reward in the format expected by Gymnasium
         observation = np.asarray(self.player_board, dtype=np.int8)
