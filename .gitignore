@@ -26,6 +26,8 @@ tmp/
 .claude/
 .tokensave/
 .serena/
+graphify-out/
+.graphify*
 
 # LaTeX build output (report/)
 report/build/
@@ -33,3 +35,6 @@ report/indent.log
 /log
 /checkpoints
 /plots
+
+# Weights & Biases local run cache
+wandb/
