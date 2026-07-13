@@ -1,0 +1,67 @@
+% !TeX root = ../slides.tex
+% 06-dqn.tex — DQN agent, matching agents/dqn_agent.py.
+
+\section{DQN Agent}
+
+\begin{frame}{Deep Q-Network \parencite{mnih2015dqn}}
+  \twocol{
+    \textbf{Components} (\texttt{agents/dqn\_agent.py})
+    \begin{itemize}
+      \item online $Q_\theta$ + \alert{target} $Q_{\theta^-}$ network
+        (same architecture, periodic hard sync);
+      \item replay buffer, capacity $10^5$, uniform sampling;
+      \item $\varepsilon$-greedy exploration, \alert{masked} over already
+        revealed cells, linearly decayed $1.0 \to 0.05$;
+      \item Huber/MSE TD loss, gradient clipped to norm $10.0$.
+    \end{itemize}
+  }{
+    \textbf{Masked action selection}
+    \begin{itemize}
+      \item both $\arg\max_a Q_\theta(s,a)$ (greedy step) and the
+        bootstrapped $\max_a Q_{\theta^-}(s',a)$ (target computation) set
+        $Q(s, a_{\text{revealed}}) \gets -\infty$ before the max;
+      \item guarantees the agent \alert{never} re-selects an
+        already-uncovered cell, at train \emph{and} test time.
+    \end{itemize}
+  }
+\end{frame}
+
+\begin{frame}{DQN Update}
+  \[
+    y = r + \gamma \, (1 - d) \max_{a' \,:\, \text{masked}} Q_{\theta^-}(s', a')
+    \qquad
+    \mathcal{L}(\theta) = \big(Q_\theta(s,a) - y\big)^2
+  \]
+  \begin{itemize}
+    \item $d = 1$ if $s'$ is terminal (win or loss) — no bootstrap past
+      episode end;
+    \item minibatches of $128$ transitions drawn uniformly from the replay
+      buffer;
+    \item target network $\theta^- \gets \theta$ every $500$ optimizer
+      steps (hard update).
+  \end{itemize}
+  \begin{highlightbox}{Discount factor}
+    $\gamma = 0.8$ — deliberately low: episodes are short
+    (board fully solved or a mine hit within a handful of moves), so
+    a strongly-discounted horizon still captures the whole episode
+    while keeping targets well-conditioned.
+  \end{highlightbox}
+\end{frame}
+
+\begin{frame}{DQN Training Loop}
+  \begin{algorithm}[H]
+    \DontPrintSemicolon
+    \KwIn{$\varepsilon \gets \varepsilon_{\text{start}}$, empty replay buffer $\mathcal{D}$, $\theta^- \gets \theta$}
+    \For{episode $= 1 \ldots N$}{
+      reset environment, encode $s \gets$ one-hot$(s) \Vert$ density\;
+      \Repeat{episode terminal}{
+        $a \gets \arg\max_{a\,:\,\text{unrevealed}} Q_\theta(s,a)$ w.p. $1-\varepsilon$, else random unrevealed cell\;
+        $s', r, d \gets \text{env.step}(a)$; store $(s,a,r,s',d)$ in $\mathcal{D}$\;
+        sample minibatch from $\mathcal{D}$; update $\theta$ by SGD on $\mathcal{L}(\theta)$; clip grad norm to $10.0$\;
+        every $500$ steps: $\theta^- \gets \theta$\;
+        $s \gets s'$; decay $\varepsilon$\;
+      }
+      periodically: run validation episodes, save checkpoint if best win rate so far\;
+    }
+  \end{algorithm}
+\end{frame}
