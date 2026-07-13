@@ -1,7 +1,6 @@
 import copy
 import gymnasium as gym
-import models.actor_net as actor_net
-import models.critic_net as critic_net
+import models.factory as model_factory
 import buffers.rollout_buffer as rollout_buffer
 import models.encodings as encodings
 from datetime import datetime
@@ -33,6 +32,7 @@ class PPOAgent:
             validation_episodes: int = 0,
             validation_seed_start: int = 500_000,
             validation_frequency: int = 5,
+            architecture_name : str = "fully_conv_3layer_64ch_11in",
             checkpoint_dir: str | Path = "checkpoints/ppo",
         ):
         
@@ -46,6 +46,7 @@ class PPOAgent:
         self.validation_episodes = validation_episodes
         self.validation_seed_start = validation_seed_start
         self.validation_frequency = validation_frequency
+        self.architecture_name = architecture_name
         self.checkpoint_dir = checkpoint_dir
 
         # == ENVIRONMENT == 
@@ -55,8 +56,8 @@ class PPOAgent:
         # ==================
 
         # == NEURAL NETWORKS == 
-        self.actor = actor_net.ActorNetwork().to(self.device)
-        self.critic = critic_net.CriticNetwork().to(self.device)
+        self.actor = model_factory.get_actor_network(architecture_name).to(self.device)
+        self.critic = model_factory.get_critic_network(architecture_name).to(self.device)
         self.actor_optimizer = torch.optim.Adam(
             self.actor.parameters(),
             lr=actor_learning_rate
@@ -179,6 +180,7 @@ class PPOAgent:
             },
 
             "hyperparameters": {
+                "architecture_name": self.architecture_name,
                 "max_actor_grad_norm":
                     self.max_actor_grad_norm,
 

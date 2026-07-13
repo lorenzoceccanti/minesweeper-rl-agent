@@ -16,6 +16,10 @@ def load_dqn_agent_from_checkpoint(checkpoint_path, env, device, fallback_seed) 
     hyperparameters = checkpoint.get("hyperparameters", {})
     checkpoint_seed = checkpoint.get("seed")
 
+    # older checkpoint versions might not have an architecture name:
+    # in that case, it necessarly means that the architecture_name is the fully conv. one
+    architecture_name = hyperparameters.get("architecture_name", "fully_conv_3layer_64ch_11in")
+
     if checkpoint_seed is None:
         checkpoint_seed = fallback_seed
 
@@ -36,6 +40,7 @@ def load_dqn_agent_from_checkpoint(checkpoint_path, env, device, fallback_seed) 
         learning_starts=0,
         train_frequency=1,
         logger=None,
+        architecture_name=architecture_name
     )
 
     agent.online_network.load_state_dict(checkpoint["online_network_state_dict"])
@@ -57,6 +62,10 @@ def load_ppo_agent_from_checkpoint(checkpoint_path, env, device, fallback_seed) 
     checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=True)
     hyperparameters = checkpoint.get("hyperparameters", {})
     checkpoint_seed = checkpoint.get("seed")
+
+    # older checkpoint versions might not have an architecture name:
+    # in that case, it necessarly means that the architecture_name is the fully conv. one
+    architecture_name = hyperparameters.get("architecture_name", "fully_conv_3layer_64ch_11in")
 
     if checkpoint_seed is None:
         checkpoint_seed = fallback_seed
@@ -80,6 +89,7 @@ def load_ppo_agent_from_checkpoint(checkpoint_path, env, device, fallback_seed) 
         actor_learning_rate=hyperparameters.get("actor_learning_rate", 3e-4),
         critic_learning_rate=hyperparameters.get("critic_learning_rate", 3e-4),
         logger=None,
+        architecture_name=architecture_name
     )
 
     agent.actor.load_state_dict(checkpoint["actor_state_dict"])

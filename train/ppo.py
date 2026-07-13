@@ -11,6 +11,8 @@ def run(config: dict) -> dict:
     device = select_device(config.get("device"))
     print(f"Using device: {device}")
 
+    architecture_name = config["architecture_name"]
+
     env = mine.MinesweeperEnv(
         board_height=config["board_height"],
         board_width=config["board_width"],
@@ -45,6 +47,7 @@ def run(config: dict) -> dict:
         validation_episodes=config["validation_episodes"],
         validation_seed_start=config["validation_seed_start"],
         validation_frequency=config["validation_frequency"],
+        architecture_name=config["architecture_name"],
         checkpoint_dir=config["checkpoint_dir"],
     )
 

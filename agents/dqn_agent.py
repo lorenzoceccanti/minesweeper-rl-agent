@@ -1,6 +1,7 @@
 import copy
 import gymnasium as gym
 import models.fully_conv_qnet as fully_conv_qnet
+import models.factory as model_factory
 import models.encodings as encodings
 import buffers.replay_buffer as replay_buffer
 import torch
@@ -31,6 +32,7 @@ class DQNAgent:
         validation_episodes: int = 0,
         validation_seed_start: int = 500_000,
         validation_frequency: int = 100,
+        architecture_name: str = "fully_conv_3layer_64ch_11in",
         checkpoint_dir: str | Path = "checkpoints/dqn",
     ):
         self.seed = seed
@@ -50,8 +52,8 @@ class DQNAgent:
         self.target_update_frequency = target_update_frequency
 
         # online_network is trained, target_network is updated periodically
-        self.online_network = fully_conv_qnet.FullyConvQNetwork().to(self.device)
-        self.target_network = fully_conv_qnet.FullyConvQNetwork().to(self.device)
+        self.online_network = model_factory.get_q_network(architecture_name).to(self.device)
+        self.target_network = model_factory.get_q_network(architecture_name).to(self.device)
 
         # At the initialization we have that
         # Q(s,a,theta_minus) = Q(s,a,theta)
@@ -98,7 +100,9 @@ class DQNAgent:
         self.validation_episodes = validation_episodes
         self.validation_seed_start = validation_seed_start
         self.validation_frequency = validation_frequency
+        
         self.checkpoint_dir = checkpoint_dir
+        self.architecture_name = architecture_name
         self.validation_history = []
         self.best_validation_win_rate = -1.0
         self.checkpoint_path = None
@@ -176,6 +180,7 @@ class DQNAgent:
 
             # Hyperparameters
             "hyperparameters": {
+                "architecture_name": self.architecture_name,
                 "learning_rate": self.learning_rate,
                 "discount_factor": self.discount_factor,
                 "initial_epsilon": self.initial_epsilon,
