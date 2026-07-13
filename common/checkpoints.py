@@ -4,7 +4,6 @@ from agents import dqn_agent as dqn
 from agents import ppo_agent as ppo
 from common.paths import resolve_project_path
 from common.seeding import set_global_seed
-from models import encodings
 
 
 def load_dqn_agent_from_checkpoint(checkpoint_path, env, device, fallback_seed) -> dqn.DQNAgent:
@@ -89,19 +88,3 @@ def load_ppo_agent_from_checkpoint(checkpoint_path, env, device, fallback_seed) 
     agent.critic.eval()
 
     return agent
-
-
-def ppo_get_greedy_action(agent: ppo.PPOAgent, observation, mine_density: float) -> int:
-    obs_tensor = torch.as_tensor(observation, dtype=torch.long, device=agent.device)
-    encoded_obs = encodings.one_hot_encode_board(obs_tensor, mine_density)
-    action_mask = obs_tensor.eq(-2).flatten().unsqueeze(0)
-
-    if not action_mask.any():
-        raise RuntimeError("No valid actions available.")
-
-    with torch.no_grad():
-        logits = agent.actor(encoded_obs)
-        masked_logits = logits.masked_fill(~action_mask, -torch.inf)
-        action = masked_logits.argmax(dim=1).item()
-
-    return int(action)

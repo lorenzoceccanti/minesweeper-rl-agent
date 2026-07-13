@@ -84,7 +84,7 @@ class PPOAgent:
         # ======================
 
         # == TRAINING METRICS ==
-        self.episode_rewards = []
+        self.episode_returns = []
         self.episode_lengths = []
         self.episode_wins = []
 
@@ -144,8 +144,8 @@ class PPOAgent:
             "env_seed_start":
                 self.env_seed_start,
 
-            "episode_rewards":
-                self.episode_rewards,
+            "episode_returns":
+                self.episode_returns,
 
             "episode_lengths":
                 self.episode_lengths,
@@ -280,34 +280,43 @@ class PPOAgent:
                 truncated = False
 
                 while not (terminated or truncated):
-                    # conversione in tensore e codifica one-hot dello stato del board
-                    obs_tensor = torch.as_tensor(
-                        obs,
-                        dtype=torch.long,
-                        device=self.device,
-                    )
-                    encoded_obs = encodings.one_hot_encode_board(obs_tensor, validation_mine_density)
-                    # gestione action masking, analogo a quanto fatto nella get_action
-                    action_mask = obs_tensor.eq(-2).flatten().unsqueeze(0)
-
-                    with torch.no_grad():
-                        logits = self.actor(encoded_obs)
-                        action = logits.masked_fill(
-                            ~action_mask,
-                            -torch.inf,
-                        ).argmax(dim=1).item()
-
-                    obs, _, terminated, truncated, info = self.validation_env.step(
-                        int(action)
-                    )
+                    action = self.get_greedy_action(obs, validation_mine_density)
+                    obs, _, terminated, truncated, info = self.validation_env.step(action)
                 # incrementiamo il contatore se l'episodio è terminato con una vittoria
                 wins += int(terminated and info.get("status") == "won")
         finally:
             # ripristino dello stato originale dell'actor
             self.actor.train(was_training)
-            
+
         # restituisce il win-rate medio sugli episodes di validazione
         return wins / self.validation_episodes
+
+    def get_greedy_action(self, obs: np.ndarray, mine_density: float) -> int:
+        """Seleziona l'azione greedy (argmax sui logits mascherati), usata in
+        validazione e in test. Deterministica, a differenza di get_action che
+        campiona dalla distribuzione della policy.
+        """
+        # conversione in tensore e codifica one-hot dello stato del board
+        obs_tensor = torch.as_tensor(
+            obs,
+            dtype=torch.long,
+            device=self.device,
+        )
+        encoded_obs = encodings.one_hot_encode_board(obs_tensor, mine_density)
+        # gestione action masking, analogo a quanto fatto nella get_action
+        action_mask = obs_tensor.eq(-2).flatten().unsqueeze(0)
+
+        if not action_mask.any():
+            raise RuntimeError("No valid actions available.")
+
+        with torch.no_grad():
+            logits = self.actor(encoded_obs)
+            action = logits.masked_fill(
+                ~action_mask,
+                -torch.inf,
+            ).argmax(dim=1).item()
+
+        return int(action)
 
     def get_action(self, obs: np.ndarray, mine_density: float) -> tuple[int, float]:
         """ Samples an action from the current policy
@@ -668,7 +677,7 @@ class PPOAgent:
                     else:
                         end_reason = "truncated"
 
-                    self.episode_rewards.append(
+                    self.episode_returns.append(
                         current_episode_reward
                     )
 

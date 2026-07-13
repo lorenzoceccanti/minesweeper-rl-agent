@@ -63,7 +63,7 @@ def load_training_metrics(
     algorithm = checkpoint["algorithm"]
 
     common_metrics = (
-        "episode_rewards",
+        "episode_returns",
         "episode_lengths",
         "episode_wins",
         "training_error",
@@ -152,8 +152,8 @@ def plot_training_from_checkpoint(
         "algorithm"
     ].upper()
 
-    episode_rewards = metrics[
-        "episode_rewards"
+    episode_returns = metrics[
+        "episode_returns"
     ]
 
     episode_wins = metrics[
@@ -164,8 +164,8 @@ def plot_training_from_checkpoint(
         "episode_lengths"
     ]
 
-    reward_episodes, rolling_rewards = moving_average(
-        episode_rewards,
+    return_episodes, rolling_returns = moving_average(
+        episode_returns,
         window,
     )
 
@@ -210,14 +210,14 @@ def plot_training_from_checkpoint(
     # ======================================================
 
     axes[0].plot(
-        reward_episodes,
-        rolling_rewards,
+        return_episodes,
+        rolling_returns,
     )
     axes[0].set_xlabel("Episode")
     axes[0].set_ylabel("Average return")
     axes[0].set_title(
         f"Episode return — moving average "
-        f"over {min(window, len(episode_rewards))} episodes"
+        f"over {min(window, len(episode_returns))} episodes"
     )
     axes[0].grid(
         True,

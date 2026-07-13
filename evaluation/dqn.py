@@ -105,6 +105,11 @@ def run(config: dict) -> dict:
         dtype=np.float64,
     )
 
+    # sample std (Bessel's correction): questi episodi sono trattati come un
+    # campione della vera distribuzione di performance dell'agente, utile per
+    # eventuali confronti statistici tra checkpoint
+    std_ddof = 1 if len(episode_results) > 1 else 0
+
     summary = {
         "algorithm": "dqn",
         "board_height": config["board_height"],
@@ -116,9 +121,9 @@ def run(config: dict) -> dict:
         "wins": wins,
         "win_rate": wins / len(episode_results),
         "mean_return": float(returns.mean()),
-        "std_return": float(returns.std(ddof=0)),
+        "std_return": float(returns.std(ddof=std_ddof)),
         "mean_length": float(lengths.mean()),
-        "std_length": float(lengths.std(ddof=0)),
+        "std_length": float(lengths.std(ddof=std_ddof)),
         "episodes": episode_results,
     }
 

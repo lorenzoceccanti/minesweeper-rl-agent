@@ -73,11 +73,13 @@ class DQNAgent:
         # == Replay Buffer ==
 
         self.replay_buffer = replay_buffer.ReplayBuffer(replay_buffer_capacity)
+        self.replay_buffer_capacity = replay_buffer_capacity
         self.batch_size = batch_size
 
         # == Parameters
         self.learning_rate = learning_rate
         self.discount_factor = discount_factor
+        self.initial_epsilon = initial_epsilon
         self.epsilon = initial_epsilon
         self.epsilon_decay = epsilon_decay
         self.final_epsilon = final_epsilon
@@ -85,7 +87,7 @@ class DQNAgent:
         # == Evaluation
         self.training_error = []
         self.loss_history = []
-        self.episode_rewards = [] # i-th element contains the return of the i-th episode
+        self.episode_returns = [] # i-th element contains the return of the i-th episode
         self.episode_lengths = [] # i-th element contains the number of actions of the i-th episode
         self.episode_wins = [] # i-th element contains 1 if the i-th episode concluded with a win
         self.epsilon_history = [] # i-th element contains the eps used in the i-th episode
@@ -152,7 +154,7 @@ class DQNAgent:
             "seed": self.seed,
 
             # Per-episode metrics
-            "episode_rewards": self.episode_rewards,
+            "episode_returns": self.episode_returns,
             "episode_lengths": self.episode_lengths,
             "episode_wins": self.episode_wins,
             "epsilon_history": self.epsilon_history,
@@ -176,6 +178,14 @@ class DQNAgent:
             "hyperparameters": {
                 "learning_rate": self.learning_rate,
                 "discount_factor": self.discount_factor,
+                "initial_epsilon": self.initial_epsilon,
+                "epsilon_decay": self.epsilon_decay,
+                "final_epsilon": self.final_epsilon,
+                "replay_buffer_capacity": self.replay_buffer_capacity,
+                "batch_size": self.batch_size,
+                "target_update_frequency": self.target_update_frequency,
+                "learning_starts": self.learning_starts,
+                "train_frequency": self.train_frequency,
             }
         }
 
@@ -417,14 +427,14 @@ class DQNAgent:
         with torch.no_grad():
             td_error = targets - q_values_for_taken_actions
             mean_abs_td_error = torch.mean(torch.abs(td_error)).item()
-       
+        
         self.training_error.append(mean_abs_td_error)
         self.loss_history.append(loss.item())
         return loss.item()
 
     def train(self, n_episodes: int, save_checkpoint: bool = False,
-              checkpoint_dir: str | Path = "checkpoints/dqn",
-              env_seed_start: int | None = None):
+            checkpoint_dir: str | Path = "checkpoints/dqn",
+            env_seed_start: int | None = None):
         # Log output is an array of strings to be returned to stdout
         # if the log option is set to true
         for episode in tqdm(range(n_episodes)):
@@ -512,7 +522,7 @@ class DQNAgent:
             else:
                 end_reason = "truncated"
 
-            self.episode_rewards.append(float(episode_reward))
+            self.episode_returns.append(float(episode_reward))
             self.episode_lengths.append(int(episode_steps))
             self.episode_wins.append(int(end_reason == "won"))
             self.epsilon_history.append(float(self.epsilon))

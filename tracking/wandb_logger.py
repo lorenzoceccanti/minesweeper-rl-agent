@@ -6,15 +6,39 @@ replays them as a single end-of-run upload.
 
 from pathlib import Path
 
+import numpy as np
 import torch
 import wandb
 
 _COMMON_METRICS = (
-    "episode_rewards",
+    "episode_returns",
     "episode_lengths",
     "episode_wins",
     "training_error",
 )
+
+_WIN_RATE_ROLLING_WINDOW = 100
+
+
+def _win_rate_series(episode_wins: list[int], window: int = _WIN_RATE_ROLLING_WINDOW) -> tuple[np.ndarray, np.ndarray]:
+    """Cumulative and trailing-window win rate at each episode index.
+
+    Cumulative smears together policy versions from across the whole run and
+    reacts far too slowly on long runs to show current performance; the
+    rolling window tracks the recent trend and can also show regressions,
+    which a monotonic cumulative average never can.
+    """
+    wins = np.asarray(episode_wins, dtype=np.float64)
+    cumulative_wins = np.cumsum(wins)
+    cumulative_win_rate = cumulative_wins / np.arange(1, wins.size + 1)
+
+    window_start = np.maximum(0, np.arange(wins.size) - window + 1)
+    padded_cumsum = np.concatenate(([0.0], cumulative_wins))
+    window_sum = padded_cumsum[np.arange(1, wins.size + 1)] - padded_cumsum[window_start]
+    window_count = np.arange(1, wins.size + 1) - window_start
+    rolling_win_rate = window_sum / window_count
+
+    return cumulative_win_rate, rolling_win_rate
 
 _ALGORITHM_METRICS = {
     "dqn": ("epsilon_history", "loss_history"),
@@ -224,13 +248,19 @@ def log_run(
     wandb.define_metric("train/*", step_metric="episode")
 
     metric_keys = _COMMON_METRICS + _ALGORITHM_METRICS[algorithm]
-    n_episodes = len(checkpoint.get("episode_rewards", []))
+    n_episodes = len(checkpoint.get("episode_returns", []))
+    episode_wins = checkpoint.get("episode_wins", [])
+    if episode_wins:
+        cumulative_win_rate, rolling_win_rate = _win_rate_series(episode_wins)
     for episode in range(n_episodes):
         row = {
             f"train/{key}": checkpoint[key][episode]
             for key in metric_keys
             if key in checkpoint and episode < len(checkpoint[key])
         }
+        if episode < len(episode_wins):
+            row["train/cumulative_win_rate"] = float(cumulative_win_rate[episode])
+            row[f"train/rolling_win_rate_{_WIN_RATE_ROLLING_WINDOW}"] = float(rolling_win_rate[episode])
         if row:
             row["episode"] = episode + 1
             wandb.log(row)

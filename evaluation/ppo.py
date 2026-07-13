@@ -1,6 +1,6 @@
 import numpy as np
 
-from common.checkpoints import load_ppo_agent_from_checkpoint, ppo_get_greedy_action
+from common.checkpoints import load_ppo_agent_from_checkpoint
 from common.paths import resolve_project_path
 from common.seeding import select_device, set_global_seed
 from environment import minesweeper_env as mine
@@ -54,11 +54,7 @@ def run(config: dict) -> dict:
             episode_length = 0
 
             while not (terminated or truncated):
-                action = ppo_get_greedy_action(
-                    agent=agent,
-                    observation=observation,
-                    mine_density=mine_density,
-                )
+                action = agent.get_greedy_action(observation, mine_density)
 
                 (
                     observation,
@@ -109,6 +105,12 @@ def run(config: dict) -> dict:
         dtype=np.float64,
     )
 
+    # sample std (Bessel's correction): questi episodi sono trattati come un
+    # campione della vera distribuzione di performance dell'agente, utile per
+    # eventuali confronti statistici tra checkpoint. Con un solo episodio la
+    # varianza campionaria non è definita, quindi si ricade sulla popolazione.
+    std_ddof = 1 if len(episode_results) > 1 else 0
+
     summary = {
         "algorithm": "ppo",
         "board_height": config["board_height"],
@@ -120,9 +122,9 @@ def run(config: dict) -> dict:
         "wins": wins,
         "win_rate": wins / len(episode_results),
         "mean_return": float(returns.mean()),
-        "std_return": float(returns.std(ddof=0)),
+        "std_return": float(returns.std(ddof=std_ddof)),
         "mean_length": float(lengths.mean()),
-        "std_length": float(lengths.std(ddof=0)),
+        "std_length": float(lengths.std(ddof=std_ddof)),
         "episodes": episode_results,
     }
 
