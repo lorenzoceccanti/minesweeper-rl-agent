@@ -14,8 +14,11 @@ def set_global_seed(seed: int) -> None:
         torch.cuda.manual_seed_all(seed)
 
 
-def select_device() -> torch.device:
-    """Select the best available torch device: CUDA, MPS, then CPU."""
+def select_device(forced_device: str | None = None) -> torch.device:
+    """Select the torch device to use: forced_device if given, otherwise the best available (CUDA, MPS, then CPU)."""
+    if forced_device:
+        return torch.device(forced_device)
+
     if torch.cuda.is_available():
         return torch.device("cuda")
 

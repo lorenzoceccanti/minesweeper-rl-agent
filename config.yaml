@@ -1,7 +1,10 @@
 main:
   auto_test: true
+  # forza device pytorch ("cpu", "cuda", "mps")
+  device: null
 
 dqn:
+  architecture_name: fully_conv_3layer_64ch_11in
   train:
     render_mode: null
     agent_seed: 42
@@ -25,7 +28,6 @@ dqn:
     checkpoint_dir: checkpoints/dqn
     wandb_project: minesweeper-rl
     wandb_entity: null
-    architecture_name: fully_conv_3layer_64ch
   test:
     checkpoint_path: checkpoints/dqn/best/best.pt
     board_height: 6
@@ -39,9 +41,9 @@ dqn:
     test_output_dir: plots/test
     wandb_project: minesweeper-rl
     wandb_entity: null
-    architecture_name: fully_conv_3layer_64ch
 
 ppo:
+  architecture_name: fully_conv_3layer_64ch_11in
   train:
     render_mode: null
     agent_seed: 42
@@ -67,7 +69,6 @@ ppo:
     checkpoint_dir: checkpoints/ppo
     wandb_project: minesweeper-rl
     wandb_entity: null
-    architecture_name: fully_conv_3layer_64ch_11in
   test:
     checkpoint_path: checkpoints/ppo/best/best.pt
     board_height: 6
@@ -81,7 +82,6 @@ ppo:
     test_output_dir: plots/test
     wandb_project: minesweeper-rl
     wandb_entity: null
-    architecture_name: fully_conv_3layer_64ch
 
 game:
   width: 9

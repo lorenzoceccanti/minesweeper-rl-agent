@@ -24,7 +24,7 @@ def run(config: dict) -> dict:
 
     set_global_seed(config["agent_seed"])
 
-    device = select_device()
+    device = select_device(config.get("device"))
     print(f"Using device: {device}")
 
     env = mine.MinesweeperEnv(

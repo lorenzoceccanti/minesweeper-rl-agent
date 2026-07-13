@@ -1,8 +1,8 @@
 """Minesweeper RL project entry point.
 
 Examples:
-    python main.py train --alg=dqn --h=6 --w=5 --m=5 --n-episodes=500
-    python main.py test  --alg=ppo --ckpt=checkpoints/ppo/best/best.pt --h=6 --w=6 --m=5
+    python main.py train --alg=dqn --h=6 --w=6 --m=5 --n-episodes=500
+    python main.py test  --alg=ppo --ckpt=checkpoints/*-best.pt --h=6 --w=6 --m=5
     python main.py game  --h=9 --w=9 --m=10
 """
 
@@ -14,14 +14,14 @@ import yaml
 from common.paths import resolve_project_path
 import train.dqn
 import train.ppo
-import test.dqn
-import test.ppo
+import evaluation.dqn
+import evaluation.ppo
 
 DEFAULT_CONFIG_PATH = resolve_project_path("config.yaml")
 
 # quale modulo train/test usare in base al valore di --alg
 TRAIN_MODULES = {"dqn": train.dqn, "ppo": train.ppo}
-TEST_MODULES = {"dqn": test.dqn, "ppo": test.ppo}
+TEST_MODULES = {"dqn": evaluation.dqn, "ppo": evaluation.ppo}
 
 # alcune chiavi di config hanno anche una versione abbreviata del flag
 # da riga di comando, ad esempio board_height diventa sia --board-height
@@ -135,7 +135,18 @@ def main() -> None:
         if key in subtree and value is not None:
             overrides[key] = value
 
+    # il dizionario finale di config da usare per training/test/game è
+    # ottenuto facendo il merge della config di default con gli override
     run_config = {**subtree, **overrides}
+
+    if bootstrap_args.command != "game":
+        # architecture_name è definito una sola volta per algoritmo
+        # (config[alg]["architecture_name"]), non separatamente per
+        # train e test, quindi va aggiunto qui alla config finale
+        run_config["architecture_name"] = config[bootstrap_args.alg]["architecture_name"]
+        # device è globale (non specifico di alg/train/test), quindi va
+        # letto da main.device e aggiunto qui alla config finale
+        run_config["device"] = config.get("main", {}).get("device")
 
     if bootstrap_args.command == "game":
         from environment import manual_play
@@ -161,6 +172,8 @@ def main() -> None:
             test_subtree["board_height"] = result["board_height"]
             test_subtree["board_width"] = result["board_width"]
             test_subtree["n_mines"] = result["n_mines"]
+            test_subtree["architecture_name"] = config[bootstrap_args.alg]["architecture_name"]
+            test_subtree["device"] = run_config["device"]
             TEST_MODULES[bootstrap_args.alg].run(test_subtree)
         return
 
