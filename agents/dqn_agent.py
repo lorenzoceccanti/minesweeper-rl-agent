@@ -98,7 +98,7 @@ class DQNAgent:
         self.checkpoint_dir = checkpoint_dir
         self.validation_history = []
         self.best_validation_win_rate = -1.0
-        self.best_checkpoint_path = None
+        self.checkpoint_path = None
 
         # This is the counter of timesteps elapsed
         self.global_step = 0
@@ -554,7 +554,7 @@ class DQNAgent:
                         "%Y-%m-%d-%H-%M-%S"
                     )
 
-                    self.best_checkpoint_path = self.save_checkpoint(
+                    self.checkpoint_path = self.save_checkpoint(
                         checkpoint_dir=self.checkpoint_dir,
                         filename=f"{timestamp}-best.pt",
                     )

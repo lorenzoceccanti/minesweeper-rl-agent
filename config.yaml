@@ -1,0 +1,90 @@
+main:
+  auto_test: true
+
+dqn:
+  train:
+    render_mode: null
+    agent_seed: 42
+    train_env_seed_start: 100000
+    board_height: 6
+    board_width: 5
+    n_mines: 5
+    n_episodes: 10000
+    learning_rate: 0.0003
+    start_epsilon: 1.0
+    final_epsilon: 0.05
+    discount_factor: 0.8
+    batch_size: 128
+    replay_buffer_capacity: 100000
+    target_update_frequency: 500
+    learning_starts: 5000
+    train_frequency: 4
+    validation_episodes: 500
+    validation_seed_start: 500000
+    validation_frequency: 100
+    checkpoint_dir: checkpoints/dqn
+    wandb_project: minesweeper-rl
+    wandb_entity: null
+    architecture_name: fully_conv_3layer_64ch
+  test:
+    checkpoint_path: checkpoints/dqn/best/best.pt
+    board_height: 6
+    board_width: 6
+    n_mines: 5
+    test_seed_start: 1000000
+    test_seed_count: 1000
+    render_mode: null
+    agent_seed: 42
+    moving_average_window: 50
+    test_output_dir: plots/test
+    wandb_project: minesweeper-rl
+    wandb_entity: null
+    architecture_name: fully_conv_3layer_64ch
+
+ppo:
+  train:
+    render_mode: null
+    agent_seed: 42
+    train_env_seed_start: 100000
+    board_height: 6
+    board_width: 6
+    n_mines: 5
+    n_episodes: 150000
+    rollout_steps: 1024
+    batch_size: 256
+    update_epochs: 10
+    discount_factor: 0.95
+    gae_lambda: 0.95
+    clip_epsilon: 0.1
+    max_actor_grad_norm: 0.5
+    max_critic_grad_norm: 5.0
+    entropy_coefficient: 0.005
+    validation_episodes: 500
+    validation_seed_start: 500000
+    validation_frequency: 5
+    actor_learning_rate: 0.0002
+    critic_learning_rate: 0.003
+    checkpoint_dir: checkpoints/ppo
+    wandb_project: minesweeper-rl
+    wandb_entity: null
+    architecture_name: fully_conv_3layer_64ch_11in
+  test:
+    checkpoint_path: checkpoints/ppo/best/best.pt
+    board_height: 6
+    board_width: 6
+    n_mines: 5
+    test_seed_start: 1000000
+    test_seed_count: 1000
+    render_mode: null
+    agent_seed: 42
+    moving_average_window: 50
+    test_output_dir: plots/test
+    wandb_project: minesweeper-rl
+    wandb_entity: null
+    architecture_name: fully_conv_3layer_64ch
+
+game:
+  width: 9
+  height: 9
+  mines: 10
+  seed: null

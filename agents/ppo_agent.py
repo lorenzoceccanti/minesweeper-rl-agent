@@ -40,7 +40,7 @@ class PPOAgent:
         self.logger = logger
         self.device = device
         self.last_checkpoint_path = None
-        self.best_checkpoint_path = None
+        self.checkpoint_path = None
         self.validation_env = validation_env
         self.validation_episodes = validation_episodes
         self.validation_seed_start = validation_seed_start
@@ -713,7 +713,7 @@ class PPOAgent:
                         "%Y-%m-%d-%H-%M-%S"
                     )
 
-                    self.best_checkpoint_path = self.save_checkpoint(
+                    self.checkpoint_path = self.save_checkpoint(
                         checkpoint_dir=self.checkpoint_dir,
                         filename=f"{timestamp}-best.pt",
                     )
