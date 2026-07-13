@@ -10,7 +10,7 @@ dqn:
     agent_seed: 42
     train_env_seed_start: 100000
     board_height: 6
-    board_width: 5
+    board_width: 6
     n_mines: 5
     n_episodes: 10000
     learning_rate: 0.0003
