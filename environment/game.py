@@ -173,7 +173,7 @@ class Game:
         else:
             return 0
         
-    def uncover_cell(self, i, j):
+    def uncover_cell(self, i, j) -> int:
         """Reveal a safe cell and, if it is empty, its connected empty region."""
         if not self.check_boundaries(i, j):
             raise IndexError("Cell coordinates are outside the board")
@@ -181,6 +181,10 @@ class Game:
         if self.board[i][j] == -1:
             raise ValueError("uncover_cell must be called only on safe cells")
         
+        # number of cells revealed during the current action.
+        # this will correspond to delta_n_t in the reward function.
+        newly_opened_cells = 0
+
         # Important: the temptation to write this function using a recursive approach
         # was very high. So, we reasoned about the usage of a stack, in which
         # the next neighbouring coordinate cells to visit are stored
@@ -204,7 +208,10 @@ class Game:
             # how the code is implemented could be both a clicked cell or
             # a neighbor of a 0 cell)
             self.player_board[current_i][current_j] = self.board[current_i][current_j]
+            # Total number of cells revealed during the entire game
             self.opened_cells += 1
+            # Number of cells revealed during the current action
+            newly_opened_cells += 1
 
             # If the just revealed cell has a number > 0 (mines around), stop
             # current the iteration here. We do not propagate the lookup, and consequently
@@ -235,6 +242,7 @@ class Game:
                     
                     # Adding to the stack a neighbor
                     cells_to_visit.append((neighbor_i, neighbor_j))
+        return newly_opened_cells
     
 
     def print_board(self):

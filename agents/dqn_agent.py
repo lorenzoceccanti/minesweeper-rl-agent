@@ -1,3 +1,4 @@
+import copy
 import gymnasium as gym
 import models.fully_conv_qnet as fully_conv_qnet
 import models.encodings as encodings
@@ -30,7 +31,7 @@ class DQNAgent:
         validation_episodes: int = 0,
         validation_seed_start: int = 500_000,
         validation_frequency: int = 100,
-        best_checkpoint_dir: str | Path = "checkpoints/dqn/best",
+        checkpoint_dir: str | Path = "checkpoints/dqn",
     ):
         self.seed = seed
         self.logger = logger
@@ -72,11 +73,13 @@ class DQNAgent:
         # == Replay Buffer ==
 
         self.replay_buffer = replay_buffer.ReplayBuffer(replay_buffer_capacity)
+        self.replay_buffer_capacity = replay_buffer_capacity
         self.batch_size = batch_size
 
         # == Parameters
         self.learning_rate = learning_rate
         self.discount_factor = discount_factor
+        self.initial_epsilon = initial_epsilon
         self.epsilon = initial_epsilon
         self.epsilon_decay = epsilon_decay
         self.final_epsilon = final_epsilon
@@ -84,7 +87,7 @@ class DQNAgent:
         # == Evaluation
         self.training_error = []
         self.loss_history = []
-        self.episode_rewards = [] # i-th element contains the return of the i-th episode
+        self.episode_returns = [] # i-th element contains the return of the i-th episode
         self.episode_lengths = [] # i-th element contains the number of actions of the i-th episode
         self.episode_wins = [] # i-th element contains 1 if the i-th episode concluded with a win
         self.epsilon_history = [] # i-th element contains the eps used in the i-th episode
@@ -95,10 +98,11 @@ class DQNAgent:
         self.validation_episodes = validation_episodes
         self.validation_seed_start = validation_seed_start
         self.validation_frequency = validation_frequency
-        self.best_checkpoint_dir = best_checkpoint_dir
+        self.checkpoint_dir = checkpoint_dir
         self.validation_history = []
         self.best_validation_win_rate = -1.0
-        self.best_checkpoint_path = None
+        self.checkpoint_path = None
+        self.best_state_dict = None
 
         # This is the counter of timesteps elapsed
         self.global_step = 0
@@ -106,7 +110,8 @@ class DQNAgent:
     def save_checkpoint(
             self,
             checkpoint_dir: str | Path = "checkpoints/dqn",
-            filename: str | None = None
+            filename: str | None = None,
+            state_dict_overrides: dict | None = None,
     ) -> Path:
         
         checkpoint_dir = Path(checkpoint_dir)
@@ -149,7 +154,7 @@ class DQNAgent:
             "seed": self.seed,
 
             # Per-episode metrics
-            "episode_rewards": self.episode_rewards,
+            "episode_returns": self.episode_returns,
             "episode_lengths": self.episode_lengths,
             "episode_wins": self.episode_wins,
             "epsilon_history": self.epsilon_history,
@@ -162,12 +167,30 @@ class DQNAgent:
             "validation_history": self.validation_history,
             "best_validation_win_rate": self.best_validation_win_rate,
 
+            # Board configuration
+            "board_config": {
+                "board_height": self.env.unwrapped.board_height,
+                "board_width": self.env.unwrapped.board_width,
+                "n_mines": self.env.unwrapped.n_mines,
+            },
+
             # Hyperparameters
             "hyperparameters": {
                 "learning_rate": self.learning_rate,
                 "discount_factor": self.discount_factor,
+                "initial_epsilon": self.initial_epsilon,
+                "epsilon_decay": self.epsilon_decay,
+                "final_epsilon": self.final_epsilon,
+                "replay_buffer_capacity": self.replay_buffer_capacity,
+                "batch_size": self.batch_size,
+                "target_update_frequency": self.target_update_frequency,
+                "learning_starts": self.learning_starts,
+                "train_frequency": self.train_frequency,
             }
         }
+
+        if state_dict_overrides:
+            checkpoint.update(state_dict_overrides)
 
         torch.save(
             checkpoint,
@@ -177,9 +200,28 @@ class DQNAgent:
         self.last_checkpoint_path = checkpoint_path
         return checkpoint_path
 
-    def get_greedy_action(self, obs: np.ndarray) -> int:
+    def get_mine_density(self, env: gym.Env) -> float:
+        """ Helper function used to compute the mine density
+        from the environment"""
+        # We'll call it after each env.reset() for support
+        # at future implementations that may involve
+        # a dynamically increasing number of mines in the environment
+
+        # the unwrapped reference of the environment ensures
+        # to expose correctly the constructor field of our MinesweeperEnv
+        # this might be useful if the caller has used some wrappers
+        # to block the timesteps at a maximum number of iterations
+
+        base_env = env.unwrapped
+        return float (
+            base_env.n_mines / (
+                base_env.board_height * base_env.board_width
+            )
+        )
+
+    def get_greedy_action(self, obs: np.ndarray, mine_density: float) -> int:
         """ Selects the valid action with the highest Q-value.
-        This implementation exploits action masking."""
+        This implementation exploits action masking and the idea of mine density"""
 
         obs_tensor = torch.as_tensor(obs, dtype=torch.long, device=self.device)
         action_mask = (
@@ -195,7 +237,7 @@ class DQNAgent:
         
         # One hot encoding of the observation space
         # [H, W] -> [1, C, H, W]
-        encoded_obs = encodings.one_hot_encode_board(obs_tensor)
+        encoded_obs = encodings.one_hot_encode_board(obs_tensor, mine_density)
 
         # Importante: durante l'exploitation (action selection con p = 1-eps)
         # i q_values sono presi dalla rete con parametri theta, cioè dalla
@@ -203,7 +245,7 @@ class DQNAgent:
         # in fase di inferenza. Per questo si introduce torch.no_grad: si evita
         # in questo modo di costruire il grafo computazionale e si risparmia memoria.
         with torch.no_grad():
-            # [1, 10, H, W] -> [1, H * W]
+            # [1, 11, H, W] -> [1, H * W]
             q_values = self.online_network(encoded_obs)
 
             # THE TRICK: IN ACTION MASKING INVALID ACTIONS RECEIVE Q = -INFINITY.
@@ -218,7 +260,7 @@ class DQNAgent:
         return int(action)
 
 
-    def get_action(self, obs: np.ndarray) -> int:
+    def get_action(self, obs: np.ndarray, mine_density: float) -> int:
         """
         Selects an action using an epsilon-greedy policy.
         This implementation performs action masking, in order
@@ -255,7 +297,7 @@ class DQNAgent:
         # q_values). We call the function get_greedy_action responsible to
         # do that part.
 
-        return self.get_greedy_action(obs)
+        return self.get_greedy_action(obs, mine_density)
 
     def decay_epsilon(self):
         self.epsilon = max(
@@ -277,7 +319,7 @@ class DQNAgent:
         if len(self.replay_buffer) < self.batch_size:
             return None
 
-        obs, actions, rewards, terminateds, next_obs = self.replay_buffer.sample(
+        obs, actions, rewards, terminateds, next_obs, mine_densities = self.replay_buffer.sample(
             self.batch_size
         )
 
@@ -311,6 +353,12 @@ class DQNAgent:
             device=self.device,
         )
 
+        mine_densities_tensor = torch.as_tensor(
+            mine_densities,
+            dtype=torch.float32,
+            device=self.device
+        )
+
         # [batch_size, H, W] -> [batch_size, H * W]
         next_valid_action_mask = (
             next_obs_tensor
@@ -318,8 +366,8 @@ class DQNAgent:
             .flatten(start_dim=1)
         )
 
-        obs = encodings.one_hot_encode_board(obs_tensor)
-        next_obs = encodings.one_hot_encode_board(next_obs_tensor)
+        obs = encodings.one_hot_encode_board(obs_tensor, mine_densities_tensor)
+        next_obs = encodings.one_hot_encode_board(next_obs_tensor, mine_densities_tensor)
 
         # Prendo i Q-values dati dalla online_network, relativamente
         # ad ognuno degli stati presenti nel minibatch (sono dentro al tensore obs)
@@ -379,14 +427,14 @@ class DQNAgent:
         with torch.no_grad():
             td_error = targets - q_values_for_taken_actions
             mean_abs_td_error = torch.mean(torch.abs(td_error)).item()
-       
+        
         self.training_error.append(mean_abs_td_error)
         self.loss_history.append(loss.item())
         return loss.item()
 
     def train(self, n_episodes: int, save_checkpoint: bool = False,
-              checkpoint_dir: str | Path = "checkpoints/dqn",
-              env_seed_start: int | None = None):
+            checkpoint_dir: str | Path = "checkpoints/dqn",
+            env_seed_start: int | None = None):
         # Log output is an array of strings to be returned to stdout
         # if the log option is set to true
         for episode in tqdm(range(n_episodes)):
@@ -397,6 +445,7 @@ class DQNAgent:
             else:
                 episode_seed = env_seed_start + episode
             obs, info = self.env.reset(seed=episode_seed)
+            mine_density = self.get_mine_density(self.env)
             terminated = False
             truncated = False
 
@@ -405,7 +454,7 @@ class DQNAgent:
 
             while not (terminated or truncated):
                 # Choosing an action using eps-greedy
-                action = self.get_action(obs)
+                action = self.get_action(obs, mine_density)
                 # Take action, observe reward and next state from the environment
                 next_obs, reward, terminated, truncated, info = self.env.step(action)
 
@@ -441,7 +490,8 @@ class DQNAgent:
                     action=action,
                     reward=reward,
                     terminated=terminated,
-                    next_obs=next_obs
+                    next_obs=next_obs,
+                    mine_density=mine_density
                 )
 
                 # Increment by one the counter of timesteps by one
@@ -472,7 +522,7 @@ class DQNAgent:
             else:
                 end_reason = "truncated"
 
-            self.episode_rewards.append(float(episode_reward))
+            self.episode_returns.append(float(episode_reward))
             self.episode_lengths.append(int(episode_steps))
             self.episode_wins.append(int(end_reason == "won"))
             self.epsilon_history.append(float(self.epsilon))
@@ -516,10 +566,21 @@ class DQNAgent:
                 if validation_win_rate > self.best_validation_win_rate:
                     self.best_validation_win_rate = validation_win_rate
 
-                    self.best_checkpoint_path = self.save_checkpoint(
-                        checkpoint_dir=self.best_checkpoint_dir,
-                        filename="best.pt",
-                    )
+                    self.best_state_dict = {
+                        "online_network_state_dict": copy.deepcopy(self.online_network.state_dict()),
+                        "target_network_state_dict": copy.deepcopy(self.target_network.state_dict()),
+                    }
+
+        if self.best_state_dict is not None:
+            timestamp = datetime.now().strftime(
+                "%Y-%m-%d-%H-%M-%S"
+            )
+
+            self.checkpoint_path = self.save_checkpoint(
+                checkpoint_dir=self.checkpoint_dir,
+                filename=f"{timestamp}-best.pt",
+                state_dict_overrides=self.best_state_dict,
+            )
 
         if save_checkpoint:
             self.last_checkpoint_path = self.save_checkpoint(
@@ -552,6 +613,7 @@ class DQNAgent:
                 obs, info = self.validation_env.reset(
                     seed=self.validation_seed_start + episode
                 )
+                mine_density = self.get_mine_density(self.validation_env)
 
                 terminated = False
                 truncated = False
@@ -562,7 +624,7 @@ class DQNAgent:
                     # greedy, facendo argmax. inoltre, nella get_greedy_action
                     # già disabilitiamo la costruzione del computational graph,
                     # quindi non occorre rifarlo anche qui.
-                    action = self.get_greedy_action(obs)
+                    action = self.get_greedy_action(obs, mine_density)
 
                     obs, _, terminated, truncated, info = (
                         self.validation_env.step(action)

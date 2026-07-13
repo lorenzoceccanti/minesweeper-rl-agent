@@ -1,3 +1,4 @@
+import copy
 import gymnasium as gym
 import models.actor_net as actor_net
 import models.critic_net as critic_net
@@ -32,7 +33,7 @@ class PPOAgent:
             validation_episodes: int = 0,
             validation_seed_start: int = 500_000,
             validation_frequency: int = 5,
-            best_checkpoint_dir: str | Path = "checkpoints/ppo/best",
+            checkpoint_dir: str | Path = "checkpoints/ppo",
         ):
         
         self.seed = seed
@@ -40,12 +41,12 @@ class PPOAgent:
         self.logger = logger
         self.device = device
         self.last_checkpoint_path = None
-        self.best_checkpoint_path = None
+        self.checkpoint_path = None
         self.validation_env = validation_env
         self.validation_episodes = validation_episodes
         self.validation_seed_start = validation_seed_start
         self.validation_frequency = validation_frequency
-        self.best_checkpoint_dir = best_checkpoint_dir
+        self.checkpoint_dir = checkpoint_dir
 
         # == ENVIRONMENT == 
         self.env = env
@@ -83,7 +84,7 @@ class PPOAgent:
         # ======================
 
         # == TRAINING METRICS ==
-        self.episode_rewards = []
+        self.episode_returns = []
         self.episode_lengths = []
         self.episode_wins = []
 
@@ -93,11 +94,13 @@ class PPOAgent:
         self.entropy_history = []
         self.validation_history = []
         self.best_validation_win_rate = -1.0
+        self.best_state_dict = None
     
     def save_checkpoint(
             self,
             checkpoint_dir: str | Path = "checkpoints/ppo",
             filename: str | None = None,
+            state_dict_overrides: dict | None = None,
     ) -> Path:
 
         checkpoint_dir = Path(checkpoint_dir)
@@ -141,8 +144,8 @@ class PPOAgent:
             "env_seed_start":
                 self.env_seed_start,
 
-            "episode_rewards":
-                self.episode_rewards,
+            "episode_returns":
+                self.episode_returns,
 
             "episode_lengths":
                 self.episode_lengths,
@@ -167,6 +170,13 @@ class PPOAgent:
 
             "best_validation_win_rate":
                 self.best_validation_win_rate,
+
+            # Board configuration
+            "board_config": {
+                "board_height": self.env.unwrapped.board_height,
+                "board_width": self.env.unwrapped.board_width,
+                "n_mines": self.env.unwrapped.n_mines,
+            },
 
             "hyperparameters": {
                 "max_actor_grad_norm":
@@ -204,6 +214,9 @@ class PPOAgent:
             },
         }
 
+        if state_dict_overrides:
+            checkpoint.update(state_dict_overrides)
+
         torch.save(
             checkpoint,
             checkpoint_path,
@@ -213,6 +226,25 @@ class PPOAgent:
 
         return checkpoint_path
 
+    def get_mine_density(self, env: gym.Env) -> float:
+        """ Helper function used to compute the mine density
+        from the environment"""
+        # We'll call it after each env.reset() for support
+        # at future implementations that may involve
+        # a dynamically increasing number of mines in the environment
+
+        # the unwrapped reference of the environment ensures
+        # to expose correctly the constructor field of our MinesweeperEnv
+        # this might be useful if the caller has used some wrappers
+        # to block the timesteps at a maximum number of iterations
+
+        base_env = env.unwrapped
+        return float (
+            base_env.n_mines / (
+                base_env.board_height * base_env.board_width
+            )
+        )
+    
     def reset_episode(self, episode_index: int):
         """ Resets the episode by propering handling the seed
         (due to the misaligment between rollout buffer refreshes
@@ -243,40 +275,50 @@ class PPOAgent:
                 obs, info = self.validation_env.reset(
                     seed=self.validation_seed_start + episode
                 )
+                validation_mine_density = self.get_mine_density(self.validation_env)
                 terminated = False
                 truncated = False
 
                 while not (terminated or truncated):
-                    # conversione in tensore e codifica one-hot dello stato del board
-                    obs_tensor = torch.as_tensor(
-                        obs,
-                        dtype=torch.long,
-                        device=self.device,
-                    )
-                    encoded_obs = encodings.one_hot_encode_board(obs_tensor)
-                    # gestione action masking, analogo a quanto fatto nella get_action
-                    action_mask = obs_tensor.eq(-2).flatten().unsqueeze(0)
-
-                    with torch.no_grad():
-                        logits = self.actor(encoded_obs)
-                        action = logits.masked_fill(
-                            ~action_mask,
-                            -torch.inf,
-                        ).argmax(dim=1).item()
-
-                    obs, _, terminated, truncated, info = self.validation_env.step(
-                        int(action)
-                    )
+                    action = self.get_greedy_action(obs, validation_mine_density)
+                    obs, _, terminated, truncated, info = self.validation_env.step(action)
                 # incrementiamo il contatore se l'episodio è terminato con una vittoria
                 wins += int(terminated and info.get("status") == "won")
         finally:
             # ripristino dello stato originale dell'actor
             self.actor.train(was_training)
-            
+
         # restituisce il win-rate medio sugli episodes di validazione
         return wins / self.validation_episodes
 
-    def get_action(self, obs: np.ndarray) -> tuple[int, float]:
+    def get_greedy_action(self, obs: np.ndarray, mine_density: float) -> int:
+        """Seleziona l'azione greedy (argmax sui logits mascherati), usata in
+        validazione e in test. Deterministica, a differenza di get_action che
+        campiona dalla distribuzione della policy.
+        """
+        # conversione in tensore e codifica one-hot dello stato del board
+        obs_tensor = torch.as_tensor(
+            obs,
+            dtype=torch.long,
+            device=self.device,
+        )
+        encoded_obs = encodings.one_hot_encode_board(obs_tensor, mine_density)
+        # gestione action masking, analogo a quanto fatto nella get_action
+        action_mask = obs_tensor.eq(-2).flatten().unsqueeze(0)
+
+        if not action_mask.any():
+            raise RuntimeError("No valid actions available.")
+
+        with torch.no_grad():
+            logits = self.actor(encoded_obs)
+            action = logits.masked_fill(
+                ~action_mask,
+                -torch.inf,
+            ).argmax(dim=1).item()
+
+        return int(action)
+
+    def get_action(self, obs: np.ndarray, mine_density: float) -> tuple[int, float]:
         """ Samples an action from the current policy
         Args:
             observation: An observation returned by the
@@ -293,7 +335,7 @@ class PPOAgent:
         
         # Producing a one-hot encoding of the observation tensor
         # [H,W] -> [1, C, H, W]
-        encoded_obs = encodings.one_hot_encode_board(obs_tensor)
+        encoded_obs = encodings.one_hot_encode_board(obs_tensor, mine_density)
 
         # The action mask is a reshaped version of the actions
         # having obs == -2 in their cell.
@@ -348,7 +390,7 @@ class PPOAgent:
 
         # Prendiamo tutte le transactions nel rollout_buffer
 
-        obs, _, rewards, terminateds, truncateds, next_obs, _ = self.rollout_buffer.get_all()
+        obs, _, rewards, terminateds, truncateds, next_obs, _, mine_densities = self.rollout_buffer.get_all()
         
         # convertiamo in tensori pytorch: alcuni vanno passati alla rete neurale
         # critic che lavora su one-hot encoding.
@@ -357,11 +399,12 @@ class PPOAgent:
         rewards = torch.as_tensor(rewards, dtype=torch.float32, device=self.device)
         terminateds = torch.as_tensor(terminateds, dtype=torch.float32, device=self.device)
         truncateds = torch.as_tensor(truncateds, dtype=torch.float32, device=self.device)
+        mine_densities_tensor = torch.as_tensor(mine_densities, dtype=torch.float32, device=self.device)
         
         # Producing a one-hot encoding of the observation tensor
         # [H,W] -> [1, C, H, W]
-        encoded_obs = encodings.one_hot_encode_board(obs_tensor)
-        encoded_next_obs = encodings.one_hot_encode_board(next_obs_tensor)
+        encoded_obs = encodings.one_hot_encode_board(obs_tensor, mine_densities_tensor)
+        encoded_next_obs = encodings.one_hot_encode_board(next_obs_tensor, mine_densities_tensor)
 
         # using the critic in inference mode: no computation graph construction
         # required
@@ -452,20 +495,20 @@ class PPOAgent:
 
                 # Ordine di ritorno dei parametri
                 # obs, actions, rewards, terminated, truncated, next_obs, old_log_probs, advantages, value_targets
-                obs, actions, _, _, _, _, old_log_probs, advantages, value_targets = minibatch
+                obs, actions, _, _, _, _, old_log_probs, mine_densities, advantages, value_targets = minibatch
             
                 # Ricordiamo che il formato di salvataggio nel buffer è NumPy, occorre una riconversione
                 # in PyTorch
                 
                 obs_tensor = torch.as_tensor(obs, dtype=torch.long, device=self.device)
                 actions_tensor = torch.as_tensor(actions, dtype=torch.long, device=self.device)
-                
+                mine_densities_tensor = torch.as_tensor(mine_densities, dtype=torch.float32, device=self.device)
                 old_log_probs_tensor = torch.as_tensor(old_log_probs, dtype=torch.float32, device=self.device)
                 advantages_tensor = torch.as_tensor(advantages, dtype=torch.float32, device=self.device)
                 value_targets_tensor = torch.as_tensor(value_targets, dtype=torch.float32, device=self.device)
 
                 # gli stati prima di essere dati in pasto alle reti neurali devono essere anche one-hot encodati
-                encoded_obs = encodings.one_hot_encode_board(obs_tensor)
+                encoded_obs = encodings.one_hot_encode_board(obs_tensor, mine_densities_tensor)
 
                 # action masking, come è stato fatto nella get_action sopra
                 action_mask = (
@@ -593,7 +636,7 @@ class PPOAgent:
         tqdm_bar = tqdm(total=n_episodes, desc="Training Progress", unit="episode")
         # At the beginning we reset the episode
         obs, info = self.reset_episode(episode_index = completed_episodes)
-        
+        current_mine_density = self.get_mine_density(self.env)
         current_episode_reward = 0.0
         current_episode_length = 0
 
@@ -609,13 +652,13 @@ class PPOAgent:
             while (rollout_steps < self.total_rollout_steps and
             completed_episodes < n_episodes):
                 
-                action, old_log_prob = self.get_action(obs)
+                action, old_log_prob = self.get_action(obs, current_mine_density)
                 
                 # Given an action randomly picked from the pi_old distribution
                 # we observe the environment in order to collect a trajectory
                 # to put into the ROLLOUT BUFFER.
                 next_obs, reward, terminated, truncated, info = self.env.step(action)
-                self.rollout_buffer.push(obs, action, reward, terminated, truncated, next_obs, old_log_prob)
+                self.rollout_buffer.push(obs, action, reward, terminated, truncated, next_obs, old_log_prob, current_mine_density)
 
                 obs = next_obs
                 rollout_steps += 1
@@ -634,7 +677,7 @@ class PPOAgent:
                     else:
                         end_reason = "truncated"
 
-                    self.episode_rewards.append(
+                    self.episode_returns.append(
                         current_episode_reward
                     )
 
@@ -655,6 +698,7 @@ class PPOAgent:
 
                     if completed_episodes < n_episodes:
                         obs, info = self.reset_episode(episode_index=completed_episodes)
+                        current_mine_density = self.get_mine_density(self.env)
 
             # COMPUTING THE ADVANTAGE, AFTER T rollout steps
             self.compute_advantage()
@@ -679,10 +723,22 @@ class PPOAgent:
                 # aggiorna il record e salva i pesi attuali come best model
                 if validation_win_rate > self.best_validation_win_rate:
                     self.best_validation_win_rate = validation_win_rate
-                    self.best_checkpoint_path = self.save_checkpoint(
-                        checkpoint_dir=self.best_checkpoint_dir,
-                        filename="best.pt",
-                    )
+
+                    self.best_state_dict = {
+                        "actor_state_dict": copy.deepcopy(self.actor.state_dict()),
+                        "critic_state_dict": copy.deepcopy(self.critic.state_dict()),
+                    }
 
             # INVALIDATING THE ROLLOUT BUFFER AFTER PPO UPDATE
             self.rollout_buffer.clear()
+
+        if self.best_state_dict is not None:
+            timestamp = datetime.now().strftime(
+                "%Y-%m-%d-%H-%M-%S"
+            )
+
+            self.checkpoint_path = self.save_checkpoint(
+                checkpoint_dir=self.checkpoint_dir,
+                filename=f"{timestamp}-best.pt",
+                state_dict_overrides=self.best_state_dict,
+            )
