@@ -32,7 +32,7 @@ class PPOAgent:
             validation_episodes: int = 0,
             validation_seed_start: int = 500_000,
             validation_frequency: int = 5,
-            best_checkpoint_dir: str | Path = "checkpoints/ppo/best",
+            checkpoint_dir: str | Path = "checkpoints/ppo",
         ):
         
         self.seed = seed
@@ -45,7 +45,7 @@ class PPOAgent:
         self.validation_episodes = validation_episodes
         self.validation_seed_start = validation_seed_start
         self.validation_frequency = validation_frequency
-        self.best_checkpoint_dir = best_checkpoint_dir
+        self.checkpoint_dir = checkpoint_dir
 
         # == ENVIRONMENT == 
         self.env = env
@@ -167,6 +167,13 @@ class PPOAgent:
 
             "best_validation_win_rate":
                 self.best_validation_win_rate,
+
+            # Board configuration
+            "board_config": {
+                "board_height": self.env.unwrapped.board_height,
+                "board_width": self.env.unwrapped.board_width,
+                "n_mines": self.env.unwrapped.n_mines,
+            },
 
             "hyperparameters": {
                 "max_actor_grad_norm":
@@ -701,9 +708,14 @@ class PPOAgent:
                 # aggiorna il record e salva i pesi attuali come best model
                 if validation_win_rate > self.best_validation_win_rate:
                     self.best_validation_win_rate = validation_win_rate
+                    
+                    timestamp = datetime.now().strftime(
+                        "%Y-%m-%d-%H-%M-%S"
+                    )
+
                     self.best_checkpoint_path = self.save_checkpoint(
-                        checkpoint_dir=self.best_checkpoint_dir,
-                        filename="best.pt",
+                        checkpoint_dir=self.checkpoint_dir,
+                        filename=f"{timestamp}-best.pt",
                     )
 
             # INVALIDATING THE ROLLOUT BUFFER AFTER PPO UPDATE
