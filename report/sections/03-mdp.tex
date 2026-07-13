@@ -16,62 +16,77 @@
     \begin{itemize}
       \item action $a \mapsto$ cell $(i, j)$:
       \item $i = a \operatorname{//} W,\quad j = a \bmod W$
-      \item no flagging, no action masking (v1)
+      \item no flagging; \alert{action masking implemented} in both
+        agents — logits/Q-values of already-revealed cells are set to
+        $-\infty$ before sampling/arg\,max, both at train and test time.
     \end{itemize}
   }
 \end{frame}
 
-\begin{frame}{Planned Input Encoding}
+\begin{frame}{Input Encoding}
   \twocol{
-    Each cell of the raw observation is mapped to a length-10 one-hot
-    vector \parencite{wang2025minesweepercnn}:
+    \small
+    Each cell of the raw observation is mapped to a one-hot vector, plus
+    a constant channel carrying the board's mine density
+    \parencite{wang2025minesweepercnn}:
     \begin{itemize}
       \item channels $0$–$8$: revealed value;
       \item channel $9$: unrevealed cell;
-      \item no channel for mines — never observed.
+      \item channel $10$: mine density $N/(H\!\cdot\!W)$, broadcast over
+        the whole grid — lets one network generalize across board sizes.
     \end{itemize}
-    \begin{highlightbox}{Not yet implemented}
-      Encoder \texttt{player\_board} $\to$ tensor $(10, H, W)$ is designed
-      but not built.
+    \begin{highlightbox}{Implemented}
+      \small \texttt{models/encodings.py}: player board $\to$ tensor
+      $(11, H, W)$, used by all three networks.
     \end{highlightbox}
   }{
     \centering
     \begin{tikzpicture}
       \node[mscell, fill=msrevealed, minimum size=1.1cm, font=\Large] (cell) at (0,0) {\msnum{3}};
-      \draw[flowarrow] (cell.east) -- node[midway, above, font=\tiny] {one-hot} ++(1.2,0);
-      \foreach \k in {0,...,9} {
-        \pgfmathsetmacro{\ypos}{2.475-0.55*\k}
+      \draw[flowarrow] (cell.east) -- node[midway, above, font=\tiny] {one-hot + density} ++(1.2,0);
+      \foreach \k in {0,...,10} {
+        \pgfmathsetmacro{\ypos}{2.75-0.5*\k}
         \ifnum\k=3
-          \node[draw=accentgray, minimum width=1.6cm, minimum height=0.55cm,
-                fill=unipiblue, text=white, font=\bfseries\small] at (2.55,\ypos) {\k};
+          \node[draw=accentgray, minimum width=1.9cm, minimum height=0.5cm,
+                fill=unipiblue, text=white, font=\bfseries\small] at (2.7,\ypos) {\k};
         \else
-          \node[draw=accentgray, minimum width=1.6cm, minimum height=0.55cm,
-                fill=lightgray, font=\small] at (2.55,\ypos) {\k};
+          \ifnum\k=10
+            \node[draw=accentgray, minimum width=1.9cm, minimum height=0.5cm,
+                  fill=goodgreen, text=white, font=\small] at (2.7,\ypos) {\k: density};
+          \else
+            \node[draw=accentgray, minimum width=1.9cm, minimum height=0.5cm,
+                  fill=lightgray, font=\small] at (2.7,\ypos) {\k};
+          \fi
         \fi
       }
-      \node[font=\small] at (2.55,-3.15) {channel index $0..9$};
+      \node[font=\small] at (2.7,-3.05) {channel index $0..10$};
     \end{tikzpicture}
   }
 \end{frame}
 
 \begin{frame}{Reward Function}
-  Adapted from \textcite{wang2025minesweepercnn}, for a board of size
-  $H \times W$:
+  \small
+  Normalized, flood-fill-aware reward, for a board with $N_{\text{safe}}
+  = H \cdot W - N$ safe cells and flood-fill credit $\Delta n_t$ (cells
+  uncovered in one move by the flood fill):
   \begin{table}
     \centering
+    \renewcommand{\arraystretch}{0.95}
     \begin{tabularx}{\textwidth}{l X r}
       \toprule
       \textbf{Outcome} & \textbf{Condition} & \textbf{Reward} \\
       \midrule
-      Win            & all safe cells uncovered        & $+H \cdot W$ \\
-      Loss           & mine selected                   & $-H \cdot W$ \\
-      Progress       & informed safe cell uncovered     & $+1$ \\
-      Guess          & safe cell uncovered blindly      & $-0.5$ \\
-      Already open   & already-revealed cell selected   & $-0.5$ \\
+      Win (informed) & all safe cells uncovered, not a guess & $+1 + \Delta n_t / N_{\text{safe}}$ \\
+      Win (lucky guess) & all safe cells uncovered, was a guess & $+1 + \Delta n_t / N_{\text{safe}} - 1.5/N_{\text{safe}}$ \\
+      Loss           & mine selected                   & $-1$ \\
+      Progress       & informed safe cell uncovered     & $+\Delta n_t / N_{\text{safe}}$ \\
+      Guess          & safe cell uncovered blindly      & $\Delta n_t / N_{\text{safe}} - 1.5/N_{\text{safe}}$ \\
+      Already open   & already-revealed cell selected   & $-0.5/N_{\text{safe}}$ \\
       \bottomrule
     \end{tabularx}
   \end{table}
   A move counts as a \alert{guess} when every neighboring cell of the
-  selected one is still unrevealed, i.e.\ no local information supported
-  the choice.
+  selected one is still unrevealed. Scaling by $N_{\text{safe}}$ keeps
+  the reward magnitude comparable across board sizes; flood-fill credit
+  rewards cascades proportionally to how many cells they reveal.
 \end{frame}

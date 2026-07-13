@@ -1,0 +1,65 @@
+% !TeX root = ../slides.tex
+% 05-architectures.tex — network architectures matching models/*.py.
+
+\section{Network Architectures}
+
+\begin{frame}{One Backbone, Three Heads}
+  All networks (\texttt{models/fully\_conv\_qnet.py}, \texttt{actor\_net.py},
+  \texttt{critic\_net.py}) share the same \alert{fully convolutional}
+  backbone — no board size is ever hard-coded:
+  \begin{itemize}
+    \item input: encoded board, $(11, H, W)$;
+    \item $3 \times$ \big(\texttt{Conv2d}($3{\times}3$, same-padding) $\to$
+      \texttt{ReLU}\big), $64$ channels throughout;
+    \item spatial resolution $H \times W$ is preserved end to end.
+  \end{itemize}
+  \begin{highlightbox}{Why fully convolutional?}
+    A $1{\times}1$ conv head produces one scalar per cell $\Rightarrow$ the
+    same weights work for any $H \times W$ board — no flatten-to-MLP step
+    that would tie the network to one fixed board size.
+  \end{highlightbox}
+\end{frame}
+
+\begin{frame}{Backbone Diagram}
+  \centering
+  \begin{tikzpicture}[node distance=0.55cm]
+    \node[component, fill=lightgray] (in) {Input\\$(11,H,W)$};
+    \node[component, right=of in] (c1) {Conv $3{\times}3$\\64ch + ReLU};
+    \node[component, right=of c1] (c2) {Conv $3{\times}3$\\64ch + ReLU};
+    \node[component, right=of c2] (c3) {Conv $3{\times}3$\\64ch + ReLU};
+    \node[component, right=of c3, fill=unipiblue!15] (feat) {Features\\$(64,H,W)$};
+    \draw[flowarrow] (in) -- (c1);
+    \draw[flowarrow] (c1) -- (c2);
+    \draw[flowarrow] (c2) -- (c3);
+    \draw[flowarrow] (c3) -- (feat);
+
+    \node[component, below right=1.1cm and -1.6cm of feat, fill=goodgreen!20] (qhead) {Conv $1{\times}1$ $\to$ 1ch\\flatten $\to H{\cdot}W$};
+    \node[below=0.1cm of qhead, font=\tiny] {$Q(s,\cdot)$ (DQN) / logits (Actor)};
+    \node[component, above right=1.1cm and -1.6cm of feat, fill=badred!15, minimum width=3.2cm, font=\scriptsize] (vhead) {AdaptiveAvgPool$(4,4)$\\Flatten $\to$ MLP\\$1024{\to}256{\to}1$};
+    \node[above=0.1cm of vhead, font=\tiny] {$V(s)$ (Critic)};
+
+    \draw[flowarrow] (feat) -- (qhead);
+    \draw[flowarrow] (feat) -- (vhead);
+  \end{tikzpicture}
+\end{frame}
+
+\begin{frame}{Q-Network, Actor, Critic — Output Heads}
+  \twocol{
+    \textbf{Q-Network \& Actor} (identical head shape)
+    \begin{itemize}
+      \item head: \texttt{Conv2d}($1{\times}1$), $64 \to 1$ channel;
+      \item flatten $(1,H,W) \to (H{\cdot}W)$;
+      \item \textbf{DQN}: values are $Q(s,a)$ for every cell-action;
+      \item \textbf{PPO actor}: values are policy \alert{logits}, turned
+        into $\pi(a\mid s)$ by a masked softmax.
+    \end{itemize}
+  }{
+    \textbf{Critic} (board-size independent)
+    \begin{itemize}
+      \item \texttt{AdaptiveAvgPool2d}$(4,4)$ on the $(64,H,W)$ features
+        $\to (64,4,4)$, \alert{fixed} regardless of $H,W$;
+      \item \texttt{Flatten} $\to$ MLP $1024 \to 256 \to 1$ (ReLU between);
+      \item output: scalar $V(s)$, one per state in the batch.
+    \end{itemize}
+  }
+\end{frame}
