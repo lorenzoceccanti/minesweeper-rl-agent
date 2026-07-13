@@ -1,3 +1,4 @@
+import copy
 import gymnasium as gym
 import models.actor_net as actor_net
 import models.critic_net as critic_net
@@ -93,11 +94,13 @@ class PPOAgent:
         self.entropy_history = []
         self.validation_history = []
         self.best_validation_win_rate = -1.0
+        self.best_state_dict = None
     
     def save_checkpoint(
             self,
             checkpoint_dir: str | Path = "checkpoints/ppo",
             filename: str | None = None,
+            state_dict_overrides: dict | None = None,
     ) -> Path:
 
         checkpoint_dir = Path(checkpoint_dir)
@@ -210,6 +213,9 @@ class PPOAgent:
                     self.critic_learning_rate,
             },
         }
+
+        if state_dict_overrides:
+            checkpoint.update(state_dict_overrides)
 
         torch.save(
             checkpoint,
@@ -708,15 +714,22 @@ class PPOAgent:
                 # aggiorna il record e salva i pesi attuali come best model
                 if validation_win_rate > self.best_validation_win_rate:
                     self.best_validation_win_rate = validation_win_rate
-                    
-                    timestamp = datetime.now().strftime(
-                        "%Y-%m-%d-%H-%M-%S"
-                    )
 
-                    self.checkpoint_path = self.save_checkpoint(
-                        checkpoint_dir=self.checkpoint_dir,
-                        filename=f"{timestamp}-best.pt",
-                    )
+                    self.best_state_dict = {
+                        "actor_state_dict": copy.deepcopy(self.actor.state_dict()),
+                        "critic_state_dict": copy.deepcopy(self.critic.state_dict()),
+                    }
 
             # INVALIDATING THE ROLLOUT BUFFER AFTER PPO UPDATE
             self.rollout_buffer.clear()
+
+        if self.best_state_dict is not None:
+            timestamp = datetime.now().strftime(
+                "%Y-%m-%d-%H-%M-%S"
+            )
+
+            self.checkpoint_path = self.save_checkpoint(
+                checkpoint_dir=self.checkpoint_dir,
+                filename=f"{timestamp}-best.pt",
+                state_dict_overrides=self.best_state_dict,
+            )

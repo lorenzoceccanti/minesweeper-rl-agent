@@ -1,3 +1,4 @@
+import copy
 import gymnasium as gym
 import models.fully_conv_qnet as fully_conv_qnet
 import models.encodings as encodings
@@ -99,6 +100,7 @@ class DQNAgent:
         self.validation_history = []
         self.best_validation_win_rate = -1.0
         self.checkpoint_path = None
+        self.best_state_dict = None
 
         # This is the counter of timesteps elapsed
         self.global_step = 0
@@ -106,7 +108,8 @@ class DQNAgent:
     def save_checkpoint(
             self,
             checkpoint_dir: str | Path = "checkpoints/dqn",
-            filename: str | None = None
+            filename: str | None = None,
+            state_dict_overrides: dict | None = None,
     ) -> Path:
         
         checkpoint_dir = Path(checkpoint_dir)
@@ -175,6 +178,9 @@ class DQNAgent:
                 "discount_factor": self.discount_factor,
             }
         }
+
+        if state_dict_overrides:
+            checkpoint.update(state_dict_overrides)
 
         torch.save(
             checkpoint,
@@ -549,15 +555,22 @@ class DQNAgent:
 
                 if validation_win_rate > self.best_validation_win_rate:
                     self.best_validation_win_rate = validation_win_rate
-                    
-                    timestamp = datetime.now().strftime(
-                        "%Y-%m-%d-%H-%M-%S"
-                    )
 
-                    self.checkpoint_path = self.save_checkpoint(
-                        checkpoint_dir=self.checkpoint_dir,
-                        filename=f"{timestamp}-best.pt",
-                    )
+                    self.best_state_dict = {
+                        "online_network_state_dict": copy.deepcopy(self.online_network.state_dict()),
+                        "target_network_state_dict": copy.deepcopy(self.target_network.state_dict()),
+                    }
+
+        if self.best_state_dict is not None:
+            timestamp = datetime.now().strftime(
+                "%Y-%m-%d-%H-%M-%S"
+            )
+
+            self.checkpoint_path = self.save_checkpoint(
+                checkpoint_dir=self.checkpoint_dir,
+                filename=f"{timestamp}-best.pt",
+                state_dict_overrides=self.best_state_dict,
+            )
 
         if save_checkpoint:
             self.last_checkpoint_path = self.save_checkpoint(
