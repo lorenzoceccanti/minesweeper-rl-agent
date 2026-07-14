@@ -140,10 +140,20 @@ def main() -> None:
     run_config = {**subtree, **overrides}
 
     if bootstrap_args.command != "game":
+
+        alg_root = config[bootstrap_args.alg]
+
         # architecture_name è definito una sola volta per algoritmo
         # (config[alg]["architecture_name"]), non separatamente per
         # train e test, quindi va aggiunto qui alla config finale
-        run_config["architecture_name"] = config[bootstrap_args.alg]["architecture_name"]
+        run_config["architecture_name"] = alg_root["architecture_name"]
+
+        # recupero dallo yaml i parametri hidden_channels (F), global_features_dim (G)
+        # e critic_hidden_size (numero di colonne della matrice dei pesi del MLP critic head)
+        for key in ["hidden_channels", "global_features_dim", "critic_hidden_size"]:
+            # controllo se sono presenti in cima nello yaml, nella sezione dedicata all'algoritmo
+            if key in alg_root:
+                run_config[key] = alg_root[key]
         # device è globale (non specifico di alg/train/test), quindi va
         # letto da main.device e aggiunto qui alla config finale
         run_config["device"] = config.get("main", {}).get("device")

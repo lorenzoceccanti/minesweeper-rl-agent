@@ -11,6 +11,8 @@ def run(config: dict) -> dict:
     device = select_device(config.get("device"))
     print(f"Using device: {device}")
 
+    architecture_name = config["architecture_name"]
+
     epsilon_decay = (
         config["start_epsilon"] - config["final_epsilon"]
     ) / (config["n_episodes"] / 2)
@@ -48,7 +50,10 @@ def run(config: dict) -> dict:
         validation_episodes=config["validation_episodes"],
         validation_seed_start=config["validation_seed_start"],
         validation_frequency=config["validation_frequency"],
+        architecture_name=architecture_name,
         checkpoint_dir=config["checkpoint_dir"],
+        hidden_channels=config["hidden_channels"],
+        global_features_dim=config["global_features_dim"]
     )
 
     try:

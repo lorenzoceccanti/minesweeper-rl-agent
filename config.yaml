@@ -1,10 +1,15 @@
 main:
   auto_test: true
   # forza device pytorch ("cpu", "cuda", "mps")
-  device: null
+  device: cuda
 
 dqn:
-  architecture_name: fully_conv_3layer_64ch_11in
+  # alternative: fully_conv_3layer_64ch_11in, global_skip_conv_3layer_64ch_11in 
+  architecture_name: global_skip_conv_3layer_64ch_11in
+  # number of hidden convolution channels (called F)
+  hidden_channels: 128
+  # G size in the global_skip_connection architecture
+  global_features_dim: 32
   train:
     render_mode: null
     agent_seed: 42
@@ -12,7 +17,7 @@ dqn:
     board_height: 6
     board_width: 6
     n_mines: 5
-    n_episodes: 10000
+    n_episodes: 50000
     learning_rate: 0.0003
     start_epsilon: 1.0
     final_epsilon: 0.05
@@ -43,7 +48,14 @@ dqn:
     wandb_entity: null
 
 ppo:
-  architecture_name: fully_conv_3layer_64ch_11in
+  # alternative: fully_conv_3layer_64ch_11in, global_skip_conv_3layer_64ch_11in 
+  architecture_name: global_skip_conv_3layer_64ch_11in
+  # number of hidden convolution channels (called F)
+  hidden_channels: 64
+  # G size in the global_skip_connection architecture
+  global_features_dim: 16
+  # MLP hidden dimension of the critic head
+  critic_hidden_size: 256
   train:
     render_mode: null
     agent_seed: 42
@@ -51,7 +63,7 @@ ppo:
     board_height: 6
     board_width: 6
     n_mines: 5
-    n_episodes: 150000
+    n_episodes: 50000
     rollout_steps: 1024
     batch_size: 256
     update_epochs: 10
