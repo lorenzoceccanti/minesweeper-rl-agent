@@ -5,6 +5,7 @@ import buffers.rollout_buffer as rollout_buffer
 import models.encodings as encodings
 from datetime import datetime
 from pathlib import Path
+from typing import Callable
 import numpy as np
 import torch
 from tqdm import tqdm
@@ -36,9 +37,10 @@ class PPOAgent:
             checkpoint_dir: str | Path = "checkpoints/ppo",
             hidden_channels: int = 64, # F
             global_features_dim: int = 16, # G
-            critic_hidden_size: int = 256 # numero colonne weight matrix MLP critic head
+            critic_hidden_size: int = 256, # numero colonne weight matrix MLP critic head
+            on_validation: Callable[[dict], None] | None = None,
         ):
-        
+
         self.seed = seed
         self.env_seed_start = env_seed_start
         self.logger = logger
@@ -49,6 +51,7 @@ class PPOAgent:
         self.validation_episodes = validation_episodes
         self.validation_seed_start = validation_seed_start
         self.validation_frequency = validation_frequency
+        self.on_validation = on_validation
         self.architecture_name = architecture_name
         self.checkpoint_dir = checkpoint_dir
 
@@ -733,7 +736,14 @@ class PPOAgent:
                     "win_rate": validation_win_rate,
                 })
 
-                # se il win rate corrente supera il massimo storico 
+                if self.on_validation is not None:
+                    self.on_validation({
+                        "rollout": rollout_index,
+                        "win_rate": validation_win_rate,
+                        "best_win_rate": max(self.best_validation_win_rate, validation_win_rate),
+                    })
+
+                # se il win rate corrente supera il massimo storico
                 # aggiorna il record e salva i pesi attuali come best model
                 if validation_win_rate > self.best_validation_win_rate:
                     self.best_validation_win_rate = validation_win_rate

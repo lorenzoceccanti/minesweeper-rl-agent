@@ -5,7 +5,7 @@ from plot import training_plots
 from tracking import wandb_logger
 
 
-def run(config: dict) -> dict:
+def run(config: dict, on_validation=None) -> dict:
     set_global_seed(config["agent_seed"])
 
     device = select_device(config.get("device"))
@@ -51,7 +51,8 @@ def run(config: dict) -> dict:
         checkpoint_dir=config["checkpoint_dir"],
         hidden_channels=config["hidden_channels"],
         global_features_dim=config["global_features_dim"],
-        critic_hidden_size=config["critic_hidden_size"]
+        critic_hidden_size=config["critic_hidden_size"],
+        on_validation=on_validation,
     )
 
     try:

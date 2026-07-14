@@ -10,6 +10,7 @@ import numpy as np
 from tqdm import tqdm
 from datetime import datetime
 from pathlib import Path
+from typing import Callable
 
 class DQNAgent:
     def __init__(
@@ -35,7 +36,8 @@ class DQNAgent:
         architecture_name: str = "fully_conv_3layer_64ch_11in",
         checkpoint_dir: str | Path = "checkpoints/dqn",
         hidden_channels: int = 64, # F
-        global_features_dim: int = 16 # G
+        global_features_dim: int = 16, # G
+        on_validation: Callable[[dict], None] | None = None,
     ):
         self.seed = seed
         self.logger = logger
@@ -105,7 +107,8 @@ class DQNAgent:
         self.validation_episodes = validation_episodes
         self.validation_seed_start = validation_seed_start
         self.validation_frequency = validation_frequency
-        
+        self.on_validation = on_validation
+
         self.checkpoint_dir = checkpoint_dir
         self.architecture_name = architecture_name
         self.validation_history = []
@@ -570,6 +573,14 @@ class DQNAgent:
                     "global_step": self.global_step,
                     "win_rate": validation_win_rate,
                 })
+
+                if self.on_validation is not None:
+                    self.on_validation({
+                        "episode": completed_episodes,
+                        "global_step": self.global_step,
+                        "win_rate": validation_win_rate,
+                        "best_win_rate": max(self.best_validation_win_rate, validation_win_rate),
+                    })
 
                 # utilizzando il > anziché >=, in caso di parità
                 # sul win rate si mantiene il primo checkpoint che ha raggiunto

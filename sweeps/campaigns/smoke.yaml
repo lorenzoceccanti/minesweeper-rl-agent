@@ -1,0 +1,36 @@
+campaign_name: smoke
+base_config: config.yaml
+
+tasks:
+  - id: board6x6_5mines
+    board_height: 6
+    board_width: 6
+    n_mines: 5
+    episode_budget_override: 200
+
+architectures:
+  dqn: [fully_conv_3layer_64ch_11in]
+
+search_method: random
+
+search_space:
+  dqn:
+    common:
+      learning_rate: {min: 0.0001, max: 0.001}
+      discount_factor: {values: [0.8, 0.9, 0.95]}
+    fully_conv_3layer_64ch_11in:
+      hidden_channels: {values: [32, 64]}
+
+worker_profiles:
+  smoke_profile:
+    max_concurrent_runs: 1
+    algorithms: [dqn]
+
+promotion:
+  finalists_per_sweep: 1
+  confirm_episodes: 500
+  confirm_seeds: [43]
+
+test:
+  n_episodes_per_seed: 100
+  test_seed_start: 1000000

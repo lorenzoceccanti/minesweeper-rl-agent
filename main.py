@@ -8,10 +8,14 @@ Examples:
 
 import argparse
 import sys
+from datetime import datetime
 
+import wandb
 import yaml
 
 from common.paths import resolve_project_path
+from common.config_merge import inject_algorithm_root_fields
+from tracking.wandb_logger import make_live_validation_callback
 import train.dqn
 import train.ppo
 import evaluation.dqn
@@ -140,23 +144,7 @@ def main() -> None:
     run_config = {**subtree, **overrides}
 
     if bootstrap_args.command != "game":
-
-        alg_root = config[bootstrap_args.alg]
-
-        # architecture_name è definito una sola volta per algoritmo
-        # (config[alg]["architecture_name"]), non separatamente per
-        # train e test, quindi va aggiunto qui alla config finale
-        run_config["architecture_name"] = alg_root["architecture_name"]
-
-        # recupero dallo yaml i parametri hidden_channels (F), global_features_dim (G)
-        # e critic_hidden_size (numero di colonne della matrice dei pesi del MLP critic head)
-        for key in ["hidden_channels", "global_features_dim", "critic_hidden_size"]:
-            # controllo se sono presenti in cima nello yaml, nella sezione dedicata all'algoritmo
-            if key in alg_root:
-                run_config[key] = alg_root[key]
-        # device è globale (non specifico di alg/train/test), quindi va
-        # letto da main.device e aggiunto qui alla config finale
-        run_config["device"] = config.get("main", {}).get("device")
+        inject_algorithm_root_fields(run_config, config, bootstrap_args.alg)
 
     if bootstrap_args.command == "game":
         from environment import manual_play
@@ -165,7 +153,30 @@ def main() -> None:
         return
 
     if bootstrap_args.command == "train":
-        result = TRAIN_MODULES[bootstrap_args.alg].run(run_config)
+        # timestamp deterministico per il nome della run, con la stessa struttura
+        # "{algoritmo}-{timestamp}-train" che log_run() userebbe comunque a fine
+        # training: così la run resta facile da riconoscere invece di ricevere un
+        # nome casuale da wandb
+        timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+
+        # apriamo la run wandb prima di iniziare il training, non dopo: così la
+        # callback on_validation può mandare il win rate mano a mano che gli
+        # episodi vengono giocati, invece di aspettare la fine per un unico upload
+        wandb.init(
+            project=run_config["wandb_project"],
+            entity=run_config["wandb_entity"],
+            job_type=bootstrap_args.alg,
+            group=f"{bootstrap_args.alg}-{run_config['architecture_name']}",
+            name=f"{bootstrap_args.alg}-{timestamp}-train",
+            config=run_config,
+        )
+
+        on_validation = make_live_validation_callback(bootstrap_args.alg)
+        result = TRAIN_MODULES[bootstrap_args.alg].run(run_config, on_validation=on_validation)
+
+        # log_run() dentro train/dqn.py e train/ppo.py trova la run già aperta
+        # qui sopra e la riusa, ma non la chiude da sola: tocca a noi farlo
+        wandb.finish()
 
         # se non specificato da riga di comando, il comportamento di
         # default (auto-test dopo il training) viene letto dalla config

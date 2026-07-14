@@ -191,6 +191,27 @@ def _log_test_evaluation(
     })
 
 
+def make_live_validation_callback(algorithm: str):
+    """builds an on_validation callback that logs win rate to wandb live, during training
+
+    used by main.py for normal (non-sweep) runs: logs under the same "val/win_rate"
+    key and step metric that log_run() replays at the end from the checkpoint, so the
+    live points and the post-hoc replay end up on the same chart, not two separate ones
+    """
+    step_key = _VALIDATION_STEP_KEY[algorithm]
+    val_step_field = f"val/{step_key}"
+
+    def on_validation(metrics: dict) -> None:
+        wandb.define_metric(val_step_field)
+        wandb.define_metric("val/win_rate", step_metric=val_step_field)
+        wandb.log({
+            "val/win_rate": metrics["win_rate"],
+            val_step_field: metrics[step_key],
+        })
+
+    return on_validation
+
+
 def log_run(
     algorithm: str,
     checkpoint_path: str | Path,
@@ -232,15 +253,24 @@ def log_run(
     if len(param_counts) == len(_STATE_DICT_KEYS[algorithm]) and len(param_counts) > 1:
         config["total_param_count"] = sum(param_counts.values())
 
-    run = wandb.init(
-        project=project,
-        entity=entity,
-        job_type=algorithm,
-        group=group,
-        name=name,
-        tags=tags,
-        config=config,
-    )
+    # inside a sweep-agent run, wandb.init() was already called before
+    # training started (the agent needs it to populate wandb.config with
+    # the sampled hyperparameters); re-initializing here would silently
+    # start a second, disconnected run instead of reusing it
+    owns_run = wandb.run is None
+    if owns_run:
+        run = wandb.init(
+            project=project,
+            entity=entity,
+            job_type=algorithm,
+            group=group,
+            name=name,
+            tags=tags,
+            config=config,
+        )
+    else:
+        run = wandb.run
+        run.config.update(config, allow_val_change=True)
 
     # every checkpoint field is read defensively instead of 
     # assuming it is always present
@@ -266,18 +296,23 @@ def log_run(
             wandb.log(row)
 
     # validation lives on its own x-axis instead of piggy-backing on the
-    # implicit W&B step, since it is not on the same scale as episodes
-    validation_history = checkpoint.get("validation_history", [])
-    step_key = _VALIDATION_STEP_KEY[algorithm]
-    val_step_field = f"val/{step_key}"
-    if validation_history:
-        wandb.define_metric(val_step_field)
-        wandb.define_metric("val/win_rate", step_metric=val_step_field)
-        for entry in validation_history:
-            wandb.log({
-                "val/win_rate": entry["win_rate"],
-                val_step_field: entry[step_key],
-            })
+    # implicit W&B step, since it is not on the same scale as episodes.
+    # skipped when we don't own the run: whoever opened it (main.py,
+    # a sweep trial) already streamed each validation point live, on
+    # this same "val/win_rate" key, so replaying validation_history here
+    # too would just duplicate every point on the chart
+    if owns_run:
+        validation_history = checkpoint.get("validation_history", [])
+        step_key = _VALIDATION_STEP_KEY[algorithm]
+        val_step_field = f"val/{step_key}"
+        if validation_history:
+            wandb.define_metric(val_step_field)
+            wandb.define_metric("val/win_rate", step_metric=val_step_field)
+            for entry in validation_history:
+                wandb.log({
+                    "val/win_rate": entry["win_rate"],
+                    val_step_field: entry[step_key],
+                })
 
     if "best_validation_win_rate" in checkpoint:
         wandb.summary["best_validation_win_rate"] = checkpoint["best_validation_win_rate"]
@@ -318,7 +353,11 @@ def log_run(
         best_artifact.add_file(str(best_checkpoint_path), name="checkpoint.pt")
         run.log_artifact(best_artifact)
 
-    wandb.finish()
+    # a run opened by a sweep agent is finished by the agent itself once
+    # train_entrypoint.py returns; finishing it here would end the run
+    # before the agent can move on to the next trial
+    if owns_run:
+        wandb.finish()
 
 
 def log_test_run(
