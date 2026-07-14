@@ -71,7 +71,7 @@ def test_unknown_algorithm_is_reported():
 
 def test_invalid_search_method_is_reported():
     campaign = copy.deepcopy(VALID_CAMPAIGN)
-    campaign["search_method"] = "bayes"
+    campaign["search_method"] = "not_a_real_method"
     errors = validate_campaign(campaign)
     assert any("search_method" in error for error in errors)
 

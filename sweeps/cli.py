@@ -152,6 +152,10 @@ def cmd_worker(args: argparse.Namespace) -> int:
 
     registry = Registry.load(registry_path_for(campaign["campaign_name"]))
     entries = registry.entries_for_algorithms(profile["algorithms"])
+    if args.sweep_id is not None:
+        # utile per lanciare uno sweep alla volta in processi separati (uno per
+        # sweep, in parallelo su una sola macchina) invece che in sequenza
+        entries = {sweep_id: entry for sweep_id, entry in entries.items() if sweep_id == args.sweep_id}
     if not entries:
         print(f"no registered sweeps match algorithms {profile['algorithms']}", file=sys.stderr)
         return 1
@@ -252,6 +256,7 @@ def build_parser() -> argparse.ArgumentParser:
     worker_parser.add_argument("--campaign", required=True)
     worker_parser.add_argument("--profile", required=True)
     worker_parser.add_argument("--count", type=int, default=None)
+    worker_parser.add_argument("--sweep-id", default=None)
     worker_parser.add_argument("--allow-code-mismatch", action="store_true")
     worker_parser.set_defaults(func=cmd_worker)
 

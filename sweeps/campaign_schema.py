@@ -13,7 +13,7 @@ from typing import Any
 from sweeps.config_space import KNOWN_ARCHITECTURES, build_parameter_space
 
 KNOWN_ALGORITHMS = frozenset({"dqn", "ppo"})
-KNOWN_SEARCH_METHODS = frozenset({"random", "grid"})
+KNOWN_SEARCH_METHODS = frozenset({"random", "grid", "bayes"})
 
 REQUIRED_TOP_LEVEL_KEYS = (
     "campaign_name",

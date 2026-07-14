@@ -1,0 +1,87 @@
+campaign_name: overnight_dqn_ppo
+base_config: config.yaml
+
+# board di riferimento (REFERENCE_BOARD in sweeps/budget.py): stesso task usato
+# nella random search precedente (82.80% win rate DQN, cfr. report KB), così i
+# risultati restano confrontabili con quel baseline e tra dqn/ppo. Nessun
+# episode_budget_override: essendo esattamente il board di riferimento, lo
+# scaling di budget.py assegna 20000 episodi di screening senza bisogno di
+# forzarlo a mano
+tasks:
+  - id: board6x6_5mines
+    board_height: 6
+    board_width: 6
+    n_mines: 5
+
+# entrambe le architetture per entrambi gli algoritmi: 4 sweep totali
+# (dqn/fully_conv, dqn/global_skip, ppo/fully_conv, ppo/global_skip)
+architectures:
+  dqn: [fully_conv_3layer_64ch_11in, global_skip_conv_3layer_64ch_11in]
+  ppo: [fully_conv_3layer_64ch_11in, global_skip_conv_3layer_64ch_11in]
+
+# bayes invece di random: costruisce un modello di quanto rende ogni
+# configurazione già provata e pesca dove sembra più promettente, invece di
+# pescare alla cieca -- lo spazio discreto qui non è enorme (es. ~1700
+# combinazioni per dqn escludendo il learning_rate) e con centinaia di trial
+# in una notte il random puro ripesca spesso combinazioni già viste
+search_method: bayes
+
+search_space:
+  dqn:
+    common:
+      # learning_rate: continuo su scala log, stesso ordine di grandezza
+      # validato in tmp/random_search.py (1e-4 - 1e-3)
+      learning_rate: {distribution: log_uniform_values, min: 0.0001, max: 0.001}
+      discount_factor: {values: [0.8, 0.9, 0.95, 0.99]}
+      final_epsilon: {values: [0.01, 0.05, 0.1]}
+      batch_size: {values: [64, 128]}
+      replay_buffer_capacity: {values: [50000, 100000]}
+      target_update_frequency: {values: [500, 1000, 2000]}
+      learning_starts: {values: [1000, 5000]}
+      train_frequency: {values: [1, 4]}
+      # F: canali nascosti della conv, comune a entrambe le architetture
+      # (models/factory.py). config.yaml di default usa 128; qui esploriamo
+      # anche reti più leggere/veloci
+      hidden_channels: {values: [32, 64, 128]}
+    # G: dimensione delle feature globali, esiste solo nel backbone
+    # global_skip (sweeps/config_space.py::ARCHITECTURE_RESTRICTED_PARAMS)
+    global_skip_conv_3layer_64ch_11in:
+      global_features_dim: {values: [16, 32, 64]}
+
+  ppo:
+    common:
+      actor_learning_rate: {distribution: log_uniform_values, min: 0.0001, max: 0.0003}
+      critic_learning_rate: {distribution: log_uniform_values, min: 0.0003, max: 0.002}
+      discount_factor: {values: [0.95, 0.99]}
+      gae_lambda: {values: [0.90, 0.95, 0.98]}
+      # batch_size resta sempre <= al più piccolo rollout_steps (1024), come
+      # nello script originale, così ogni combinazione campionata è valida
+      rollout_steps: {values: [1024, 2048, 4096]}
+      batch_size: {values: [64, 128, 256]}
+      update_epochs: {values: [3, 5, 10]}
+      clip_epsilon: {values: [0.1, 0.2]}
+      max_actor_grad_norm: {values: [0.5, 1.0]}
+      max_critic_grad_norm: {values: [5.0, 10.0]}
+      entropy_coefficient: {values: [0.0, 0.001, 0.005, 0.01]}
+      hidden_channels: {values: [32, 64, 128]}
+      # MLP head del critic, PPO-only ma indipendente dal backbone -> common
+      critic_hidden_size: {values: [256, 512, 1024]}
+    global_skip_conv_3layer_64ch_11in:
+      global_features_dim: {values: [16, 32, 64]}
+
+worker_profiles:
+  overnight:
+    # una macchina sola, wandb.agent gira un trial alla volta di suo
+    max_concurrent_runs: 1
+    algorithms: [dqn, ppo]
+
+promotion:
+  finalists_per_sweep: 2
+  confirm_episodes: 50000
+  # 3 seed indipendenti per un intervallo di confidenza reale sul vincitore
+  # di ogni sweep, come da piano originale
+  confirm_seeds: [43, 44, 45]
+
+test:
+  n_episodes_per_seed: 1000
+  test_seed_start: 1000000
