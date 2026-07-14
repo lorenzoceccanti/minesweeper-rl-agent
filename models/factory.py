@@ -11,10 +11,17 @@ def get_q_network(
         architecture_name: str,
         input_channels: int = 11,
         hidden_channels: int = 64,
-        global_features_dim: int = 16,
+        global_features_dim: int | None = 16,
         output_channels: int = 1,
         kernel_size: tuple[int, int] = (3,3)
     ) -> nn.Module:
+
+    # salvaguardia, nel caso ci si dimentichi di specificare
+    # il global_features_dim passando dall'architettura solo locale
+    # a quella globale
+    if global_features_dim is None:
+        global_features_dim = 16
+
     match architecture_name:
         case "fully_conv_3layer_64ch_11in":
             return FullyConvQNetwork(
@@ -40,8 +47,15 @@ def get_actor_network(
         hidden_channels: int = 64,
         output_channels: int = 1,
         kernel_size: tuple[int, int] = (3,3),
-        global_features_dim: int = 16
+        global_features_dim: int | None = 16
     ) -> nn.Module:
+
+    # salvaguardia, nel caso ci si dimentichi di specificare
+    # il global_features_dim passando dall'architettura solo locale
+    # a quella globale
+    if global_features_dim is None:
+        global_features_dim = 16
+
     match architecture_name:
         case "fully_conv_3layer_64ch_11in":
             return ActorNetwork(
@@ -67,9 +81,19 @@ def get_critic_network(
         hidden_channels: int = 64,
         output_channels: int = 1,
         kernel_size: tuple[int, int] = (3,3),
-        global_features_dim: int = 16,
-        critic_hidden_size: int = 256
+        global_features_dim: int | None = 16,
+        critic_hidden_size: int | None = 256
     ) -> nn.Module:
+
+    # salvaguardia, nel caso ci si dimentichi di specificare
+    # il global_features_dim passando dall'architettura solo locale
+    # a quella globale. nel caso del critic, la salvaguardia si estende
+    # anche al numero di colonne della matrice mlp critic head
+    if global_features_dim is None:
+        global_features_dim = 16
+    if critic_hidden_size is None:
+        critic_hidden_size = 256
+
     match architecture_name:
         case "fully_conv_3layer_64ch_11in":
             return CriticNetwork(
