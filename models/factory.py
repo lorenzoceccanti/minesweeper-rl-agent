@@ -11,6 +11,7 @@ def get_q_network(
         architecture_name: str,
         input_channels: int = 11,
         hidden_channels: int = 64,
+        global_features_dim: int = 16,
         output_channels: int = 1,
         kernel_size: tuple[int, int] = (3,3)
     ) -> nn.Module:
@@ -26,7 +27,7 @@ def get_q_network(
           return GlobalSkipQNetwork(
               input_channels=input_channels,
               hidden_channels=hidden_channels,
-              global_features_dim=16,
+              global_features_dim=global_features_dim,
               output_channels=output_channels,
               kernel_size=kernel_size
           )
@@ -66,7 +67,8 @@ def get_critic_network(
         hidden_channels: int = 64,
         output_channels: int = 1,
         kernel_size: tuple[int, int] = (3,3),
-        global_features_dim=16
+        global_features_dim: int = 16,
+        critic_hidden_size: int = 256
     ) -> nn.Module:
     match architecture_name:
         case "fully_conv_3layer_64ch_11in":
@@ -74,14 +76,16 @@ def get_critic_network(
                 input_channels=input_channels,
                 hidden_channels=hidden_channels,
                 output_channels=output_channels,
-                kernel_size=kernel_size
+                kernel_size=kernel_size,
+                hidden_size=critic_hidden_size
             )
         case "global_skip_conv_3layer_64ch_11in":
             return GlobalSkipCriticNetwork(
                 input_channels=input_channels,
                 hidden_channels=hidden_channels,
                 global_features_dim=global_features_dim,
-                kernel_size=kernel_size
+                kernel_size=kernel_size,
+                hidden_size=critic_hidden_size
             )
         case _:
             raise ValueError(f"The architecture {architecture_name} is unsupported.")

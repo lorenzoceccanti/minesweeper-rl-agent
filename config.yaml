@@ -5,6 +5,10 @@ main:
 
 dqn:
   architecture_name: fully_conv_3layer_64ch_11in
+  # number of hidden convolution channels (called F)
+  hidden_channels: 64
+  # G size in the global_skip_connection architecture
+  global_features_dim: 16
   train:
     render_mode: null
     agent_seed: 42
@@ -44,6 +48,12 @@ dqn:
 
 ppo:
   architecture_name: fully_conv_3layer_64ch_11in
+  # number of hidden convolution channels (called F)
+  hidden_channels: 64
+  # G size in the global_skip_connection architecture
+  global_features_dim: 16
+  # MLP hidden dimension of the critic head
+  critic_hidden_size: 256
   train:
     render_mode: null
     agent_seed: 42

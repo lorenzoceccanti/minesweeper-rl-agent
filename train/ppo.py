@@ -49,6 +49,9 @@ def run(config: dict) -> dict:
         validation_frequency=config["validation_frequency"],
         architecture_name=config["architecture_name"],
         checkpoint_dir=config["checkpoint_dir"],
+        hidden_channels=config["hidden_channels"],
+        global_features_dim=config["global_features_dim"],
+        critic_hidden_size=config["critic_hidden_size"]
     )
 
     try:
