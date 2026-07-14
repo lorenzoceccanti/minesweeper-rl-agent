@@ -99,7 +99,6 @@ def get_critic_network(
             return CriticNetwork(
                 input_channels=input_channels,
                 hidden_channels=hidden_channels,
-                output_channels=output_channels,
                 kernel_size=kernel_size,
                 hidden_size=critic_hidden_size
             )
