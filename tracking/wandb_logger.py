@@ -71,6 +71,51 @@ def _param_count(state_dict: dict) -> int:
     return sum(tensor.numel() for tensor in state_dict.values())
 
 
+def board_slug(board_height: int, board_width: int, n_mines: int) -> str:
+    """Height x width x mine-count, matching this module's existing
+    ``test/latest_board_config`` display convention (see ``_log_test_evaluation``)."""
+    return f"b{board_height}x{board_width}m{n_mines}"
+
+
+def run_group(
+    algorithm: str,
+    architecture_name: str | None,
+    board_height: int | None = None,
+    board_width: int | None = None,
+    n_mines: int | None = None,
+) -> str:
+    """Group name shared by every seed of one (algorithm, architecture, board)
+    variant. Board dims are included so different board sizes (e.g. 6x6 vs
+    9x9) don't get overlaid in the same W&B group chart."""
+    parts = [algorithm]
+    if architecture_name:
+        parts.append(architecture_name)
+    if board_height is not None and board_width is not None and n_mines is not None:
+        parts.append(board_slug(board_height, board_width, n_mines))
+    return "-".join(parts)
+
+
+def variant_artifact_name(
+    algorithm: str,
+    architecture_name: str | None,
+    board_height: int | None = None,
+    board_width: int | None = None,
+    n_mines: int | None = None,
+    seed: int | None = None,
+) -> str:
+    """One artifact collection per (algorithm, architecture, board, seed)
+    variant; best/final checkpoints are logged as versions within it,
+    distinguished by alias rather than by separate collection names."""
+    parts = [f"model-{algorithm}"]
+    if architecture_name:
+        parts.append(architecture_name)
+    if board_height is not None and board_width is not None and n_mines is not None:
+        parts.append(board_slug(board_height, board_width, n_mines))
+    if seed is not None:
+        parts.append(f"s{seed}")
+    return "-".join(parts)
+
+
 def _test_row(summary: dict) -> dict:
     """Return the aggregate metrics for one held-out evaluation."""
     return {
@@ -236,11 +281,20 @@ def log_run(
     if name is None:
         name = f"{algorithm}-{checkpoint_path.stem}-train"
 
+    board_config = checkpoint.get("board_config", {})
+    seed = checkpoint.get("seed")
+
     if group is None:
-        group = f"{algorithm}-{architecture_name}" if architecture_name else algorithm
+        group = run_group(
+            algorithm,
+            architecture_name,
+            board_config.get("board_height"),
+            board_config.get("board_width"),
+            board_config.get("n_mines"),
+        )
 
     config = dict(checkpoint["hyperparameters"])
-    config.update(checkpoint.get("board_config", {}))
+    config.update(board_config)
     if architecture_name is not None:
         config["architecture_name"] = architecture_name
 
@@ -343,15 +397,36 @@ def log_run(
             best_checkpoint["wandb_run_id"] = run.id
             torch.save(best_checkpoint, best_checkpoint_path)
 
-    # logged as two separate single-file artifacts
-    final_artifact = wandb.Artifact(f"{algorithm}-final-checkpoint", type="model")
+    # final/best are versions of the same per-variant collection,
+    # distinguished by alias rather than by separate artifact names
+    variant_name = variant_artifact_name(
+        algorithm,
+        architecture_name,
+        board_config.get("board_height"),
+        board_config.get("board_width"),
+        board_config.get("n_mines"),
+        seed,
+    )
+    artifact_metadata = {
+        "algorithm": algorithm,
+        "architecture_name": architecture_name,
+        "seed": seed,
+        "run_id": run.id,
+        **board_config,
+    }
+
+    final_artifact = wandb.Artifact(
+        variant_name, type="model", metadata={**artifact_metadata, "checkpoint_kind": "final"}
+    )
     final_artifact.add_file(str(checkpoint_path), name="checkpoint.pt")
-    run.log_artifact(final_artifact)
+    run.log_artifact(final_artifact, aliases=["final"])
 
     if best_checkpoint_path is not None and Path(best_checkpoint_path).exists():
-        best_artifact = wandb.Artifact(f"{algorithm}-best-checkpoint", type="model")
+        best_artifact = wandb.Artifact(
+            variant_name, type="model", metadata={**artifact_metadata, "checkpoint_kind": "best"}
+        )
         best_artifact.add_file(str(best_checkpoint_path), name="checkpoint.pt")
-        run.log_artifact(best_artifact)
+        run.log_artifact(best_artifact, aliases=["best"])
 
     # a run opened by a sweep agent is finished by the agent itself once
     # train_entrypoint.py returns; finishing it here would end the run
@@ -428,8 +503,17 @@ def log_test_run(
     if name is None:
         name = f"{algorithm}-{checkpoint_path.stem}-test"
 
+    seed = checkpoint.get("seed")
+    training_board_config = checkpoint.get("board_config", {})
+
     if group is None:
-        group = f"{algorithm}-{architecture_name}" if architecture_name else algorithm
+        group = run_group(
+            algorithm,
+            architecture_name,
+            summary["board_height"],
+            summary["board_width"],
+            summary["num_mines"],
+        )
 
     config = {
         "board_height": summary["board_height"],
@@ -451,9 +535,27 @@ def log_test_run(
         config=config,
     )
 
-    checkpoint_artifact = wandb.Artifact(f"{algorithm}-best-checkpoint", type="model")
+    variant_name = variant_artifact_name(
+        algorithm,
+        architecture_name,
+        training_board_config.get("board_height"),
+        training_board_config.get("board_width"),
+        training_board_config.get("n_mines"),
+        seed,
+    )
+    checkpoint_artifact = wandb.Artifact(
+        variant_name,
+        type="model",
+        metadata={
+            "algorithm": algorithm,
+            "architecture_name": architecture_name,
+            "seed": seed,
+            "checkpoint_kind": "best",
+            **training_board_config,
+        },
+    )
     checkpoint_artifact.add_file(str(checkpoint_path), name="checkpoint.pt")
-    run.use_artifact(checkpoint_artifact)
+    run.use_artifact(checkpoint_artifact, aliases=["best"])
 
     _log_test_evaluation(
         run=run,

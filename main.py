@@ -15,7 +15,7 @@ import yaml
 
 from common.paths import resolve_project_path
 from common.config_merge import inject_algorithm_root_fields
-from tracking.wandb_logger import make_live_validation_callback
+from tracking.wandb_logger import make_live_validation_callback, run_group
 import train.dqn
 import train.ppo
 import evaluation.dqn
@@ -166,7 +166,13 @@ def main() -> None:
             project=run_config["wandb_project"],
             entity=run_config["wandb_entity"],
             job_type=bootstrap_args.alg,
-            group=f"{bootstrap_args.alg}-{run_config['architecture_name']}",
+            group=run_group(
+                bootstrap_args.alg,
+                run_config["architecture_name"],
+                run_config["board_height"],
+                run_config["board_width"],
+                run_config["n_mines"],
+            ),
             name=f"{bootstrap_args.alg}-{timestamp}-train",
             config=run_config,
         )

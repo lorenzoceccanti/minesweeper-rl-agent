@@ -41,6 +41,7 @@ from evaluation import dqn as evaluate_dqn
 from evaluation import ppo as evaluate_ppo
 from sweeps.scoring import aggregate_confirmation, config_id, select_finalists
 from sweeps.train_entrypoint import build_run_config, load_base_config, make_wandb_callback
+from tracking.wandb_logger import run_group
 from train import dqn as train_dqn
 from train import ppo as train_ppo
 
@@ -139,7 +140,14 @@ def run_confirmation_trial(
         project=project,
         entity=entity,
         job_type=f"{algorithm}-confirm",
-        group=f"{algorithm}-{run_config['architecture_name']}-confirm",
+        group=run_group(
+            algorithm,
+            run_config["architecture_name"],
+            run_config["board_height"],
+            run_config["board_width"],
+            run_config["n_mines"],
+        )
+        + "-confirm",
         tags=["sweep", "stage:confirm", f"config:{finalist['config_id']}"],
         config={**run_config, "config_id": finalist["config_id"], "confirm_seed": seed},
     )
