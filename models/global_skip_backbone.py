@@ -29,6 +29,7 @@ class GlobalSkipBackbone(nn.Module):
             padding=padding_size,
             stride=1
         )
+        self.init_norm = nn.GroupNorm(num_groups=1, num_channels=self.hidden_channels)
         self.init_relu = nn.ReLU()
 
         # feature locali: 2 residual blocks con skip connection
@@ -40,8 +41,14 @@ class GlobalSkipBackbone(nn.Module):
         # al ramo feed-forward
         # [B, F] -> [F, G] parametri -> [B, G]
         self.global_mlp = nn.Sequential(
-           nn.Linear(self.hidden_channels, self.global_features_dim),
-           nn.ReLU()
+            nn.Linear(self.hidden_channels, self.global_features_dim),
+            # nel ramo globale è possibile utilizzare la classica LayerNorm e non la
+            # GroupNorm perché G, global_features_dim, è una dimensione fissa
+            # e valida per tutte le board (è deciso come hyperparametro a priori della fase
+            # di train dell'agente)
+            nn.LayerNorm(self.global_features_dim),
+            nn.ReLU(),
+
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -51,7 +58,8 @@ class GlobalSkipBackbone(nn.Module):
 
         # == local features == 
         # [B, C, H, W] -> [B, F, H, W]
-        x0 = self.init_relu(self.init_conv(x))
+        x0 = self.init_conv(x)
+        x0 = self.init_relu(self.init_norm(x0))
         # [B, F, H, W] -> [B, F, H, W]
         x1 = self.res_block1(x0)
         # [B, F, H, W] -> [B, F, H, W]
