@@ -261,7 +261,7 @@ def log_run(
     algorithm: str,
     checkpoint_path: str | Path,
     best_checkpoint_path: str | Path | None,
-    plot_paths: list[str | Path] | None,
+    plot_paths: list[str | Path] | None = None,
     project: str = "minesweeper-rl",
     entity: str | None = None,
     name: str | None = None,

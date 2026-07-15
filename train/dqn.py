@@ -1,7 +1,6 @@
 from agents import dqn_agent as dqn
 from common.seeding import select_device, set_global_seed
 from environment import minesweeper_env as mine
-from plot import training_plots
 from tracking import wandb_logger
 
 
@@ -87,19 +86,10 @@ def run(config: dict, on_validation=None) -> dict:
             f"{agent.checkpoint_path}"
         )
 
-        plot_path = training_plots.plot_training_from_checkpoint(
-            checkpoint_path=final_checkpoint_path,
-            board_height=config["board_height"],
-            board_width=config["board_width"],
-            num_mines=config["n_mines"],
-            output_dir="plots",
-        )
-
         wandb_logger.log_run(
             algorithm="dqn",
             checkpoint_path=final_checkpoint_path,
             best_checkpoint_path=agent.checkpoint_path,
-            plot_paths=[plot_path],
             project=config["wandb_project"],
             entity=config["wandb_entity"],
             architecture_name=config["architecture_name"],

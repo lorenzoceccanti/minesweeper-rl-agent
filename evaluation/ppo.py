@@ -140,14 +140,9 @@ def run(config: dict) -> dict:
     output_paths = test_plots.save_test_outputs(
         summary=summary,
         algorithm="ppo",
-        board_height=config["board_height"],
-        board_width=config["board_width"],
-        num_mines=config["n_mines"],
-        window=config["moving_average_window"],
         output_dir=config["test_output_dir"],
     )
 
-    print(f"Test plot saved to: {output_paths['plot']}")
     print(f"Test results saved to: {output_paths['summary']}")
 
     wandb_logger.log_test_run(

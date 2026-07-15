@@ -1,5 +1,12 @@
 from pathlib import Path
 
+import matplotlib
+
+# plotting runs inside wandb.agent()'s worker thread, not the main thread;
+# the default interactive backend crashes the whole process there (GUI
+# toolkits require the main thread) -- Agg is headless and file-only, which
+# is all this module ever does (savefig, never show)
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
