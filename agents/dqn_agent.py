@@ -77,7 +77,7 @@ class DQNAgent:
             lr=learning_rate
         )
 
-        self.loss_fn = nn.MSELoss()
+        self.loss_fn = nn.HuberLoss()
 
         # == Replay Buffer ==
 

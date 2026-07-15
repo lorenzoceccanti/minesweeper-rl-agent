@@ -597,7 +597,7 @@ class PPOAgent:
                 predicted_values = self.critic(encoded_obs)
                 # value target tensor ricordiamoci che la TD-one step estimation del return,
                 # pescata dal rollout buffer e sottoforma di tensore.
-                critic_loss = torch.nn.functional.mse_loss(predicted_values, value_targets_tensor)
+                critic_loss = torch.nn.functional.huber_loss(predicted_values, value_targets_tensor)
                 
                 critic_losses.append(
                     critic_loss.item()
