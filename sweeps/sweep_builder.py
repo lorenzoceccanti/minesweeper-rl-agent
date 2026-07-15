@@ -25,8 +25,17 @@ DEFAULT_HYPERBAND_MIN_ITER = 3
 DEFAULT_HYPERBAND_ETA = 3
 
 
+# Suffix shared by every entry in config_space.KNOWN_ARCHITECTURES (layer
+# count/channels/input channels). Sweep names lead with the parts that
+# actually differ between sweeps in a campaign (algorithm, architecture), so
+# this constant suffix is dropped there -- it's still recorded in full as the
+# fixed `architecture_name` parameter on every run.
+_ARCHITECTURE_NAME_SUFFIX = "_3layer_64ch_11in"
+
+
 def sweep_name(campaign_name: str, task_id: str, algorithm: str, architecture_name: str) -> str:
-    return f"{campaign_name}-{algorithm}-{task_id}-{architecture_name}"
+    short_architecture = architecture_name.removesuffix(_ARCHITECTURE_NAME_SUFFIX)
+    return f"{algorithm}-{short_architecture}-{task_id}-{campaign_name}"
 
 
 def build_sweep_config(

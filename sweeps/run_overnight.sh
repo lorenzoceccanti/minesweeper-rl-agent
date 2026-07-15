@@ -30,7 +30,8 @@ while true; do
         log_file="sweeps/logs/${sweep_id}.log"
         echo "$(date '+%F %T') avvio $trials_per_round trial su $sweep_id" | tee -a "$log_file"
         if ! python -m sweeps.cli worker --campaign "$campaign" --profile "$profile" \
-                --sweep-id "$sweep_id" --count "$trials_per_round" >> "$log_file" 2>&1; then
+                --sweep-id "$sweep_id" --count "$trials_per_round" --allow-code-mismatch \
+                >> "$log_file" 2>&1; then
             echo "$(date '+%F %T') worker fallito su $sweep_id, pausa ${retry_sleep_seconds}s prima di riprovare" | tee -a "$log_file"
             sleep "$retry_sleep_seconds"
         fi

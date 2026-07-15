@@ -65,7 +65,6 @@ def run(config: dict, on_validation=None) -> dict:
         print(f"Checkpoint saved to: {checkpoint_path}")
         print(f"Best validation checkpoint: {agent.checkpoint_path}")
 
-    finally:
         plot_path = training_plots.plot_training_from_checkpoint(
             checkpoint_path=checkpoint_path,
             board_height=config["board_height"],
@@ -84,6 +83,7 @@ def run(config: dict, on_validation=None) -> dict:
             architecture_name=config["architecture_name"],
         )
 
+    finally:
         env.close()
         validation_env.close()
 

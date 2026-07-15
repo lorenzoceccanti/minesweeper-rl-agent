@@ -182,6 +182,8 @@ def cmd_worker(args: argparse.Namespace) -> int:
         wandb.agent(
             sweep_id,
             function=functools.partial(run_trial, entry["algorithm"]),
+            project=args.project,
+            entity=args.entity,
             count=args.count,
         )
 
@@ -257,6 +259,8 @@ def build_parser() -> argparse.ArgumentParser:
     worker_parser.add_argument("--profile", required=True)
     worker_parser.add_argument("--count", type=int, default=None)
     worker_parser.add_argument("--sweep-id", default=None)
+    worker_parser.add_argument("--project", default="minesweeper-rl")
+    worker_parser.add_argument("--entity", default=None)
     worker_parser.add_argument("--allow-code-mismatch", action="store_true")
     worker_parser.set_defaults(func=cmd_worker)
 
