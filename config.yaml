@@ -5,41 +5,41 @@ main:
 
 dqn:
   # alternative: fully_conv_3layer_64ch_11in, global_skip_conv_3layer_64ch_11in 
-  architecture_name: global_skip_conv_3layer_64ch_11in
+  architecture_name: fully_conv_3layer_64ch_11in
   # number of hidden convolution channels (called F)
-  hidden_channels: 128
+  hidden_channels: 64
   # G size in the global_skip_connection architecture
   global_features_dim: 32
   train:
-    render_mode: null
     agent_seed: 42
-    train_env_seed_start: 50000
-    board_height: 6
-    board_width: 6
-    n_mines: 5
-    n_episodes: 50000
-    learning_rate: 0.0003
-    start_epsilon: 1.0
+    batch_size: 64
+    board_height: 9
+    board_width: 9
+    checkpoint_dir: checkpoints/dqn
+    discount_factor: 0.9
     final_epsilon: 0.05
-    epsilon_decay_type: exponential
-    epsilon_beta: 0.9998
-    discount_factor: 0.8
-    batch_size: 128
+    epsilon_decay_type: exponential # linear, exponential
+    epsilon_beta: 0.9995
+    learning_rate: 0.00018544040049250931
+    learning_starts: 1000
+    n_episodes: 50000
+    n_mines: 10
+    render_mode: null
     replay_buffer_capacity: 100000
+    start_epsilon: 1.0
     target_update_frequency: 500
-    learning_starts: 5000
+    train_env_seed_start: 50000
     train_frequency: 4
     validation_episodes: 500
-    validation_seed_start: 500000
     validation_frequency: 100
-    checkpoint_dir: checkpoints/dqn
-    wandb_project: minesweeper-rl
+    validation_seed_start: 500000
     wandb_entity: null
+    wandb_project: minesweeper-rl
   test:
     checkpoint_path: checkpoints/dqn/best/best.pt
-    board_height: 6
-    board_width: 6
-    n_mines: 5
+    board_height: 9
+    board_width: 9
+    n_mines: 10
     test_seed_start: 1000000
     test_seed_count: 1000
     render_mode: null
@@ -57,27 +57,27 @@ ppo:
   # G size in the global_skip_connection architecture
   global_features_dim: 64
   # MLP hidden dimension of the critic head
-  critic_hidden_size: 512
+  critic_hidden_size: 256
   train:
-    actor_learning_rate: 0.00023743448882373192
+    actor_learning_rate: 0.0002137795035981122
     agent_seed: 42
-    batch_size: 256
-    board_height: 6
-    board_width: 6
+    batch_size: 64
+    board_height: 9
+    board_width: 9
     checkpoint_dir: checkpoints/ppo
-    clip_epsilon: 0.2
-    critic_learning_rate: 0.00037158869524403694
+    clip_epsilon: 0.1
+    critic_learning_rate: 0.0007465458238530321
     discount_factor: 0.95
-    entropy_coefficient: 0.005
-    gae_lambda: 0.98
+    entropy_coefficient: 0.001
+    gae_lambda: 0.95
     max_actor_grad_norm: 1.0
     max_critic_grad_norm: 5.0
-    n_episodes: 100000
-    n_mines: 5
+    n_episodes: 85000
+    n_mines: 10
     render_mode: null
-    rollout_steps: 4096
+    rollout_steps: 2048
     train_env_seed_start: 50000
-    update_epochs: 5
+    update_epochs: 3
     validation_episodes: 500
     validation_frequency: 5
     validation_seed_start: 500000
@@ -85,9 +85,9 @@ ppo:
     wandb_project: minesweeper-rl
   test:
     checkpoint_path: checkpoints/ppo/best/best.pt
-    board_height: 6
-    board_width: 6
-    n_mines: 5
+    board_height: 9
+    board_width: 9
+    n_mines: 10
     test_seed_start: 1000000
     test_seed_count: 1000
     render_mode: null
