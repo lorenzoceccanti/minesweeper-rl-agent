@@ -1,4 +1,4 @@
-campaign_name: 9x9_10mines
+campaign_name: best_search_2
 base_config: config.yaml
 
 # board 9x9/10 mine: task target di questa campagna, non fissato come

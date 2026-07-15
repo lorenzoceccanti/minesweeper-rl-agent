@@ -61,7 +61,11 @@ def make_wandb_callback():
 
 
 def run_trial(algorithm: str) -> None:
-    run = wandb.init()
+    # tagged so sweep trials can be filtered out of the main Runs table,
+    # where they'd otherwise be indistinguishable from manual training runs
+    # (project/entity are inherited from the wandb.agent() call that invokes
+    # this function, so they don't need to be passed here too)
+    run = wandb.init(tags=["sweep"])
     base_config = load_base_config()
     run_config = build_run_config(algorithm, base_config, dict(run.config))
     TRAIN_MODULES[algorithm].run(run_config, on_validation=make_wandb_callback())

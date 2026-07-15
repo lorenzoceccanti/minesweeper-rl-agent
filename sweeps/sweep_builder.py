@@ -35,7 +35,7 @@ _ARCHITECTURE_NAME_SUFFIX = "_3layer_64ch_11in"
 
 def sweep_name(campaign_name: str, task_id: str, algorithm: str, architecture_name: str) -> str:
     short_architecture = architecture_name.removesuffix(_ARCHITECTURE_NAME_SUFFIX)
-    return f"{algorithm}-{short_architecture}-{task_id}-{campaign_name}"
+    return f"{campaign_name}-{algorithm}-{short_architecture}-{task_id}"
 
 
 def build_sweep_config(

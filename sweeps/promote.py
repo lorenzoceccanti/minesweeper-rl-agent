@@ -140,7 +140,7 @@ def run_confirmation_trial(
         entity=entity,
         job_type=f"{algorithm}-confirm",
         group=f"{algorithm}-{run_config['architecture_name']}-confirm",
-        tags=["stage:confirm", f"config:{finalist['config_id']}"],
+        tags=["sweep", "stage:confirm", f"config:{finalist['config_id']}"],
         config={**run_config, "config_id": finalist["config_id"], "confirm_seed": seed},
     )
     try:

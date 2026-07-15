@@ -22,14 +22,14 @@ TASK = {"id": "board6x6_5mines", "board_height": 6, "board_width": 6, "n_mines":
 
 def test_sweep_name_encodes_the_full_triple():
     assert sweep_name("search_2026_07", "board6x6_5mines", "dqn", "fully_conv_3layer_64ch_11in") == (
-        "dqn-fully_conv-board6x6_5mines-search_2026_07"
+        "search_2026_07-dqn-fully_conv-board6x6_5mines"
     )
 
 
 def test_build_sweep_config_has_expected_top_level_shape():
     config = build_sweep_config(CAMPAIGN, TASK, "dqn", "fully_conv_3layer_64ch_11in")
 
-    assert config["name"] == "dqn-fully_conv-board6x6_5mines-search_2026_07"
+    assert config["name"] == "search_2026_07-dqn-fully_conv-board6x6_5mines"
     assert config["method"] == "random"
     assert config["metric"] == {"name": "search/objective", "goal": "maximize"}
     assert config["early_terminate"]["type"] == "hyperband"
