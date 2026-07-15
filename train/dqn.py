@@ -13,9 +13,20 @@ def run(config: dict, on_validation=None) -> dict:
 
     architecture_name = config["architecture_name"]
 
-    epsilon_decay = (
-        config["start_epsilon"] - config["final_epsilon"]
-    ) / (config["n_episodes"] / 2)
+    # if the config.yaml doesn't contain the parameter
+    # epsilon_decay_type, we use the linear eps decaying
+    # this is done to support older implementations
+    decay_type = config.get("epsilon_decay_type", "linear")
+
+    if decay_type == "linear":
+        epsilon_decay = (
+            config["start_epsilon"] - config["final_epsilon"]
+        ) / (config["n_episodes"] / 2)
+        epsilon_beta = 1.0 # beta for linear eps decaying is inoperative, we put
+        # a random ignored value
+    else: # exponential epsilon decaying
+        epsilon_beta = config["epsilon_beta"]
+        epsilon_decay = 0.0 # to be ignored during exponential epsilon decaying
 
     env = mine.MinesweeperEnv(
         board_height=config["board_height"],
@@ -38,6 +49,8 @@ def run(config: dict, on_validation=None) -> dict:
         learning_rate=config["learning_rate"],
         initial_epsilon=config["start_epsilon"],
         epsilon_decay=epsilon_decay,
+        epsilon_decay_type=decay_type,
+        epsilon_beta=epsilon_beta,
         final_epsilon=config["final_epsilon"],
         discount_factor=config["discount_factor"],
         replay_buffer_capacity=config["replay_buffer_capacity"],
