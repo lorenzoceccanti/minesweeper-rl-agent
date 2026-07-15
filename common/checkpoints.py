@@ -36,7 +36,6 @@ def load_dqn_agent_from_checkpoint(checkpoint_path, env, device, fallback_seed) 
         seed=checkpoint_seed,
         learning_rate=hyperparameters.get("learning_rate", 1e-3),
         initial_epsilon=0.0,
-        epsilon_decay=0.0,
         final_epsilon=0.0,
         discount_factor=hyperparameters.get("discount_factor", 0.8),
         replay_buffer_capacity=1,
