@@ -175,7 +175,7 @@ It's inspired by the paper \textcite{wang2025minesweepercnn}.
   
   According to the game rules, all the adjacent connected cells are revealed.
   \item Instead of relying on an inefficent recursive solution, we though about a iterative solution
-  \textit{stack-based}. The coords of the cells of the cells with no mine around are pushed
+  \textit{stack-based}. The coords of the cells with no mine around are pushed
   as soon as they are found, and popped as soon as their boundaries are explored. No more pushes
   are done with one of this conditions: a mine is found, a numbered cell is found, the cell has already
   been uncovered by a previous visit.
@@ -186,8 +186,7 @@ It's inspired by the paper \textcite{wang2025minesweepercnn}.
   \twocol{
     \textbf{Action masking}
       
-      To let the agent \textit{risk} more, Q-values
-      (for off-policy algorithms) or logits (for on policy algorithm)
+      To let the agent \textit{risk} more, Q-values/logits
       are set to $-\infty$ before letting the agent perform the
       next action.
   }{
@@ -196,4 +195,32 @@ It's inspired by the paper \textcite{wang2025minesweepercnn}.
     With normalization, the rewards bounds are kept under control
     whatever is the size of the board game. 
   }
+
+  \[
+    R_t =
+    \begin{cases}
+    -1
+    & \text{a mine is selected}
+    \\[0.1cm]
+
+    -\dfrac{0.5}{S}
+    & \text{already unrevealed cell is selected}
+    \\[0.18cm]
+
+    \dfrac{\Delta n_t}{S}
+    & \text{uncovering } {\Delta n_t} \text{ cells } \textbf{without guessing}
+    \\[0.18cm]
+
+    \dfrac{\Delta n_t}{S} - \alert{\dfrac{1.5}{S}}
+    & \text{uncovering } {\Delta n_t} \text{ cells } \textbf{\alert{with a guess action}}
+    \\[0.18cm]
+
+    \textcolor{goodgreen}{1} + \dfrac{\Delta n_t}{S}
+    & \text{\textcolor{goodgreen}{winning} } \textbf{without guessing}
+    \\[0.18cm]
+
+    \textcolor{goodgreen}{1} + \dfrac{\Delta n_t}{S} - \alert{\dfrac{1.5}{S}}
+       & \text{\textcolor{goodgreen}{winning} } \textbf{\alert{with a guess action}}
+    \end{cases}
+  \]
 \end{frame}
