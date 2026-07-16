@@ -92,13 +92,228 @@
 \end{frame}
 
 \begin{frame}{Architecture 1: Fully-convolutional CNN}
-  \begin{itemize}
-    \item inserire disegno esteso con tutti i blocchi e canali
-  \end{itemize}
-  \begin{highlightbox}{Why fully convolutional?}
+\resizebox{0.98\textwidth}{!}{%
+\begin{tikzpicture}[
+  font=\scriptsize,
+  convorange/.style={
+    draw=archorange,
+    text=archorange,
+    thick,
+    align=center,
+    font=\scriptsize,
+    text width=1.75cm,
+    minimum height=2.5cm,
+    inner sep=3pt
+  },
+  reluorange/.style={
+    draw=archorange,
+    text=archorange,
+    thick,
+    align=center,
+    font=\footnotesize,
+    minimum width=0.85cm,
+    minimum height=0.85cm,
+    inner sep=2pt
+  },
+  convblack/.style={
+    draw=black,
+    text=black,
+    thick,
+    align=center,
+    font=\scriptsize,
+    text width=1.75cm,
+    minimum height=2.5cm,
+    inner sep=3pt
+  },
+  reshape/.style={
+    draw=black,
+    text=black,
+    thick,
+    align=center,
+    font=\footnotesize,
+    minimum width=2.2cm,
+    minimum height=1.0cm,
+    inner sep=3pt
+  },
+  orangeflow/.style={
+    ->,
+    thick,
+    draw=archorange
+  },
+  orangeline/.style={
+    thick,
+    draw=archorange
+  },
+  blackflow/.style={
+    ->,
+    thick,
+    draw=black
+  },
+  tensororange/.style={
+    font=\tiny,
+    text=archorange,
+    fill=white,
+    inner xsep=0.8pt,
+    inner ysep=0.3pt
+  },
+  tensorblack/.style={
+    font=\tiny,
+    text=black,
+    fill=white,
+    inner xsep=0.8pt,
+    inner ysep=0.3pt
+  }
+]
+
+% Input tensor
+\node[text=archorange, font=\scriptsize] (input)
+  {$[B,C,H,W]$};
+
+% First convolution
+\node[convorange, right=1.05cm of input] (conv1) {
+  \textbf{Conv}\\
+  channels in: $C$\\
+  channels out: $F$\\
+  kernel: $3\times3$\\
+  padding: $1$\\
+  stride: $1$
+};
+
+% First ReLU
+\node[reluorange, right=1.55cm of conv1] (relu1) {ReLU};
+
+% Second convolution
+\node[convorange, right=1.55cm of relu1] (conv2) {
+  \textbf{Conv}\\
+  channels in: $F$\\
+  channels out: $F$\\
+  kernel: $3\times3$\\
+  padding: $1$\\
+  stride: $1$
+};
+
+% Second ReLU
+\node[reluorange, right=1.55cm of conv2] (relu2) {ReLU};
+
+% Third convolution
+\node[convorange, right=1.55cm of relu2] (conv3) {
+  \textbf{Conv}\\
+  channels in: $F$\\
+  channels out: $F$\\
+  kernel: $3\times3$\\
+  padding: $1$\\
+  stride: $1$
+};
+
+% Third ReLU
+\node[reluorange, right=1.55cm of conv3] (relu3) {ReLU};
+
+% Punto di branching: ultimo punto del percorso arancione
+\coordinate (split) at ($(relu3.east)+(1.05cm,0)$);
+
+% Local features solo come testo, senza linea arancione fino a lui
+\node[
+  text=archorange,
+  font=\scriptsize,
+  align=left,
+  right=0.22cm of split
+] (local) {
+  local\\
+  features
+};
+
+% Upper path
+\draw[orangeflow]
+  (input.east) -- (conv1.west);
+
+\draw[orangeflow]
+  (conv1.east)
+  -- node[midway,above=5pt,tensororange] {$[B,F,H,W]$}
+  (relu1.west);
+
+\draw[orangeflow]
+  (relu1.east)
+  -- node[midway,above=5pt,tensororange] {$[B,F,H,W]$}
+  (conv2.west);
+
+\draw[orangeflow]
+  (conv2.east)
+  -- node[midway,above=5pt,tensororange] {$[B,F,H,W]$}
+  (relu2.west);
+
+\draw[orangeflow]
+  (relu2.east)
+  -- node[midway,above=5pt,tensororange] {$[B,F,H,W]$}
+  (conv3.west);
+
+\draw[orangeflow]
+  (conv3.east)
+  -- node[midway,above=5pt,tensororange] {$[B,F,H,W]$}
+  (relu3.west);
+
+% Ultimo tratto arancione: si ferma allo split
+\draw[orangeline]
+  (relu3.east)
+  -- node[pos=0.72,above=5pt,tensororange] {$[B,F,H,W]$}
+  (split);
+
+% Output head
+\node[
+  convblack,
+  below left=2.45cm and 0.55cm of split
+] (head) {
+  \textbf{Conv}\\
+  channels in: $F$\\
+  channels out: $1$\\
+  kernel: $1\times1$\\
+  padding: $0$\\
+  stride: $1$
+};
+
+% Reshape
+\node[reshape, left=1.75cm of head] (reshapeop) {
+  Reshape\\
+  $(\mathrm{dim}=1)$
+};
+
+% Final output
+\node[
+  text=black,
+  font=\scriptsize,
+  align=center,
+  left=1.75cm of reshapeop
+] (output) {
+  $Q$-values\\
+  or logits $\ell(s,a)$
+};
+
+% Gomito del branch basso
+\coordinate (elbow) at (split |- head.east);
+
+% Branch nero
+\draw[blackflow]
+  (split)
+  -- node[pos=0.45,right=3pt,tensorblack] {$[B,F,H,W]$}
+  (elbow)
+  -- (head.east);
+
+% Output head arrows
+\draw[blackflow]
+  (head.west)
+  -- node[midway,above=5pt,tensorblack] {$[B,1,H,W]$}
+  (reshapeop.east);
+
+\draw[blackflow]
+  (reshapeop.west)
+  -- node[midway,above=5pt,tensorblack] {$[B,H\!\cdot\!W]$}
+  (output.east);
+
+\end{tikzpicture}%
+}
+\begin{highlightbox}{Why fully convolutional?}
     A $1{\times}1$ conv head produces one scalar per cell $\Rightarrow$ the
     same weights work for any $H \times W$ board. A feed-forward classification
     head would have the issue to create space for a $W$ matrix whose shape
     depend on the board size.
-  \end{highlightbox}
+\end{highlightbox}
 \end{frame}
