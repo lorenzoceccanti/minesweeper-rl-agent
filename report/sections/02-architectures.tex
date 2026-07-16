@@ -317,3 +317,129 @@
     depend on the board size.
 \end{highlightbox}
 \end{frame}
+
+\begin{frame}{Architecture 2: \textit{Global-skip} architecture - the residual block}
+\resizebox{0.98\textwidth}{!}{%
+\begin{tikzpicture}[
+    font=\scriptsize,
+    >=Latex,
+    block/.style={
+        draw=black,
+        thick,
+        align=center,
+        minimum height=2.7cm,
+        inner sep=4pt
+    },
+    conv/.style={
+        block,
+        text width=2.25cm
+    },
+    norm/.style={
+        block,
+        text width=1.95cm
+    },
+    relu/.style={
+        block,
+        text width=1.35cm,
+        font=\large
+    },
+    sum/.style={
+        draw=black,
+        thick,
+        circle,
+        minimum size=0.62cm,
+        inner sep=0pt,
+        font=\Large
+    },
+    flow/.style={
+        ->,
+        thick
+    },
+    skip/.style={
+        ->,
+        thick,
+        rounded corners=5pt
+    },
+    node distance=0.72cm
+]
+
+% Input coordinate
+\coordinate (input) at (0,0);
+
+% Main residual branch
+\node[conv, right=0.55cm of input] (conv1) {%
+    \textbf{Conv}\\[2pt]
+    channel-in: $F$\\
+    channel-out: $F$\\
+    kernel: $3\times3$\\
+    padding: $1$\\
+    stride: $1$
+};
+
+\node[norm, right=of conv1] (norm1) {%
+    \textbf{Group Norm}\\[5pt]
+    num\_groups: $1$\\
+    n\_channels: $F$
+};
+
+\node[relu, right=of norm1] (relu1) {\textbf{ReLU}};
+
+\node[conv, right=of relu1] (conv2) {%
+    \textbf{Conv}\\[2pt]
+    channel-in: $F$\\
+    channel-out: $F$\\
+    kernel: $3\times3$\\
+    padding: $1$\\
+    stride: $1$
+};
+
+\node[norm, right=of conv2] (norm2) {%
+    \textbf{Group Norm}\\[5pt]
+    num\_groups: $1$\\
+    n\_channels: $F$
+};
+
+\node[sum, right=0.68cm of norm2] (add) {$+$};
+
+\node[relu, right=0.68cm of add] (relu2) {\textbf{ReLU}};
+
+% Main arrows
+\draw[flow] (input) -- (conv1.west);
+\draw[flow] (conv1.east) -- (norm1.west);
+\draw[flow] (norm1.east) -- (relu1.west);
+\draw[flow] (relu1.east) -- (conv2.west);
+\draw[flow] (conv2.east) -- (norm2.west);
+\draw[flow] (norm2.east) -- (add.west);
+\draw[flow] (add.east) -- (relu2.west);
+
+% Residual connection
+\coordinate (skipstart) at ($(input)!0.55!(conv1.west)$);
+\coordinate (skipbottom) at ($(skipstart)+(0,-1.95cm)$);
+\coordinate (addbottom) at ($(add.south)+(0,-1.65cm)$);
+
+\draw[skip]
+    (skipstart)
+    -- (skipbottom)
+    -- (addbottom)
+    -- (add.south);
+
+% Input and output tensor dimensions
+\node[anchor=south east, font=\footnotesize]
+    at ($(skipstart)+(-0.08cm,0.18cm)$)
+    {$[B,F,H,W]$};
+
+\coordinate (output) at ($(relu2.east)+(1.35cm,0)$);
+\draw[flow] (relu2.east) -- (output);
+
+\node[anchor=south, font=\footnotesize]
+    at ($(relu2.east)!0.56!(output)+(0.5,0.18cm)$)
+    {$[B,F,H,W]$};
+
+\end{tikzpicture}%
+}
+\begin{highlightbox}{Why a group norm?}
+The GN is commonly used with 4D tensors in CV, and for our purposes it allowed us 
+to maintain the independence on the size of the grid. With \texttt{num\_groups} $= 1$, the BN
+is mathematically equivalent to a LN layer.
+\end{highlightbox}
+\end{frame}
