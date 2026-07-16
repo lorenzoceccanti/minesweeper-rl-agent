@@ -47,12 +47,10 @@ class FakeSummary(dict):
 
 
 class FakeRun:
-    def __init__(self, state, config, best_win_rate=None, run_id="run-1"):
+    def __init__(self, state, config, best_win_rate=None, run_id="run-1", summary_key="best_win_rate"):
         self.state = state
         self.config = config
-        self.summary = FakeSummary(
-            {} if best_win_rate is None else {"best_validation_win_rate": best_win_rate}
-        )
+        self.summary = FakeSummary({} if best_win_rate is None else {summary_key: best_win_rate})
         self.id = run_id
 
 
@@ -82,14 +80,31 @@ def test_fetch_finished_screening_records_filters_unfinished_and_unreported():
         FakeRun("finished", {"learning_rate": 0.001, "architecture_name": "fully_conv_3layer_64ch_11in"}, 0.7),
         FakeRun("running", {"learning_rate": 0.002, "architecture_name": "fully_conv_3layer_64ch_11in"}, 0.9),
         FakeRun("finished", {"learning_rate": 0.003, "architecture_name": "fully_conv_3layer_64ch_11in"}, None),
+        # Hyperband-pruned but reported real progress before being killed:
+        # rankable, via best_win_rate rather than best_validation_win_rate.
+        FakeRun("failed", {"learning_rate": 0.004, "architecture_name": "fully_conv_3layer_64ch_11in"}, 0.64),
+        # Pruned before its first validation report: nothing to rank.
+        FakeRun("failed", {"learning_rate": 0.005, "architecture_name": "fully_conv_3layer_64ch_11in"}, None),
+        # Crashed (e.g. the matplotlib background-thread bug) but still
+        # reported progress before the process died: rankable too.
+        FakeRun("crashed", {"learning_rate": 0.006, "architecture_name": "fully_conv_3layer_64ch_11in"}, 0.68),
+        # Legacy run predating best_win_rate: falls back to
+        # best_validation_win_rate, which only "finished" runs ever set.
+        FakeRun(
+            "finished",
+            {"learning_rate": 0.007, "architecture_name": "fully_conv_3layer_64ch_11in"},
+            0.81,
+            summary_key="best_validation_win_rate",
+        ),
     ]
     records = fetch_finished_screening_records("sweep-1", "dqn", api=FakeApi(runs))
 
-    assert len(records) == 1
-    assert records[0]["validation_win_rate"] == 0.7
-    assert records[0]["validation_mean_return"] == 0.0
-    assert records[0]["stage"] == "screen"
-    assert records[0]["status"] == "completed"
+    win_rates = {record["validation_win_rate"] for record in records}
+    assert win_rates == {0.7, 0.64, 0.68, 0.81}
+    for record in records:
+        assert record["validation_mean_return"] == 0.0
+        assert record["stage"] == "screen"
+        assert record["status"] == "completed"
 
 
 def test_run_confirmation_trial_uses_finalists_config_id_not_a_recomputed_one(monkeypatch):

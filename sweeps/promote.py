@@ -50,6 +50,15 @@ EVALUATE_MODULES = {"dqn": evaluate_dqn, "ppo": evaluate_ppo}
 
 MISSING_MEAN_RETURN = 0.0
 
+# Terminal states worth ranking. "failed" covers both a Hyperband-pruned
+# trial (the common case -- see sweeps/sweep_builder.py's min_iter/eta) and
+# a genuine uncaught exception; "crashed" covers a process that died without
+# ever calling wandb.finish() (e.g. a background-thread SIGILL). Either way,
+# best_win_rate below is what the trial actually achieved before it stopped,
+# which is worth ranking regardless of why it stopped. "running"/"queued"
+# are excluded: not a stable result yet, could still improve.
+_RANKABLE_RUN_STATES = {"finished", "failed", "crashed"}
+
 
 def promotion_path_for(campaign_name: str) -> Path:
     return resolve_project_path(f"sweeps/registry/{campaign_name}.promotion.json")
@@ -58,15 +67,26 @@ def promotion_path_for(campaign_name: str) -> Path:
 def fetch_finished_screening_records(
     sweep_id: str, algorithm: str, api: "wandb.Api | None" = None
 ) -> list[dict[str, Any]]:
-    """Turn one sweep's finished runs into sweeps.scoring-compatible records."""
+    """Turn one sweep's runs into sweeps.scoring-compatible records.
+
+    Includes Hyperband-pruned and crashed trials, not just naturally
+    "finished" ones. `best_win_rate` is logged on every validation report
+    (agents/dqn_agent.py, agents/ppo_agent.py -- the running max fed into
+    on_validation's metrics dict), so wandb keeps it in run.summary (the
+    last logged value) even for a trial killed mid-training. That's unlike
+    `best_validation_win_rate`, which tracking/wandb_logger.py only writes
+    to wandb.summary from the end-of-run checkpoint -- never reached by a
+    pruned trial, hence kept here only as a fallback for runs that predate
+    best_win_rate or were never on a sweep controller (e.g. legacy runs).
+    """
     api = api or wandb.Api()
     sweep = api.sweep(sweep_id)
 
     records = []
     for run in sweep.runs:
-        if run.state != "finished":
+        if run.state not in _RANKABLE_RUN_STATES:
             continue
-        win_rate = run.summary.get("best_validation_win_rate")
+        win_rate = run.summary.get("best_win_rate", run.summary.get("best_validation_win_rate"))
         if win_rate is None:
             continue  # never reported a validation checkpoint; nothing to rank
         config = dict(run.config)
