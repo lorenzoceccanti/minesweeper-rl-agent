@@ -65,7 +65,11 @@ def promotion_path_for(campaign_name: str) -> Path:
 
 
 def fetch_finished_screening_records(
-    sweep_id: str, algorithm: str, api: "wandb.Api | None" = None
+    sweep_id: str,
+    algorithm: str,
+    project: str,
+    entity: str | None = None,
+    api: "wandb.Api | None" = None,
 ) -> list[dict[str, Any]]:
     """Turn one sweep's runs into sweeps.scoring-compatible records.
 
@@ -80,7 +84,8 @@ def fetch_finished_screening_records(
     best_win_rate or were never on a sweep controller (e.g. legacy runs).
     """
     api = api or wandb.Api()
-    sweep = api.sweep(sweep_id)
+    resolved_entity = entity or api.default_entity
+    sweep = api.sweep(f"{resolved_entity}/{project}/{sweep_id}")
 
     records = []
     for run in sweep.runs:
@@ -104,9 +109,14 @@ def fetch_finished_screening_records(
 
 
 def select_sweep_finalists(
-    sweep_id: str, algorithm: str, count: int, api: "wandb.Api | None" = None
+    sweep_id: str,
+    algorithm: str,
+    count: int,
+    project: str,
+    entity: str | None = None,
+    api: "wandb.Api | None" = None,
 ) -> list[dict[str, Any]]:
-    records = fetch_finished_screening_records(sweep_id, algorithm, api=api)
+    records = fetch_finished_screening_records(sweep_id, algorithm, project, entity, api=api)
     return select_finalists(records, algorithm, count)
 
 
@@ -293,7 +303,9 @@ def promote_sweep(
 ) -> dict[str, Any]:
     """Run the full finalists -> confirm -> (winner) -> held-out test pipeline for one sweep."""
     base_config = base_config or load_base_config()
-    finalists = select_sweep_finalists(sweep_id, algorithm, promotion["finalists_per_sweep"], api=api)
+    finalists = select_sweep_finalists(
+        sweep_id, algorithm, promotion["finalists_per_sweep"], project, entity, api=api
+    )
     confirm_records = run_confirmation(
         algorithm,
         finalists,

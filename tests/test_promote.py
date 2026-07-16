@@ -62,8 +62,10 @@ class FakeSweep:
 class FakeApi:
     def __init__(self, runs):
         self._runs = runs
+        self.default_entity = "fake-entity"
 
-    def sweep(self, sweep_id):
+    def sweep(self, path):
+        assert path == "fake-entity/minesweeper-rl/sweep-1"
         return FakeSweep(self._runs)
 
 
@@ -97,7 +99,7 @@ def test_fetch_finished_screening_records_filters_unfinished_and_unreported():
             summary_key="best_validation_win_rate",
         ),
     ]
-    records = fetch_finished_screening_records("sweep-1", "dqn", api=FakeApi(runs))
+    records = fetch_finished_screening_records("sweep-1", "dqn", "minesweeper-rl", api=FakeApi(runs))
 
     win_rates = {record["validation_win_rate"] for record in records}
     assert win_rates == {0.7, 0.64, 0.68, 0.81}
