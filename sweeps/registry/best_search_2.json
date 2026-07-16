@@ -1,0 +1,62 @@
+{
+  "fxgimq57": {
+    "algorithm": "dqn",
+    "architecture": "fully_conv_3layer_64ch_11in",
+    "created_at": "2026-07-15T19:11:25.351382+00:00",
+    "git_commit": "67818515251cf56d826a2c55da25859d5830c14e",
+    "git_dirty": false,
+    "source_hashes": {
+      "agents/dqn_agent.py": "969a273b5d762a3b04e5ea31ea28b78370c9e79c976a37d3a1bcba89b0339442",
+      "agents/ppo_agent.py": "68842639ffa0983a67b8b4006a7ab1b3329688ab0561a2ebba1e44aa3d41f0ea",
+      "models/factory.py": "e355d9e87692f40a1f3fdd349bed2822524b22d0f8fddc6ebe4261808e2565a8",
+      "train/dqn.py": "14a29c422035ca9aa951cd18dcbf061f970dcbc3b918fb1f354682e1a66eccb6",
+      "train/ppo.py": "d5dbfb196c2d7a048e2c69b2b8404f81d959c07262e10be3ad8915a25b69cf36"
+    },
+    "task_id": "board9x9_10mines"
+  },
+  "pxxqc3kd": {
+    "algorithm": "ppo",
+    "architecture": "global_skip_conv_3layer_64ch_11in",
+    "created_at": "2026-07-15T19:11:26.930699+00:00",
+    "git_commit": "67818515251cf56d826a2c55da25859d5830c14e",
+    "git_dirty": false,
+    "source_hashes": {
+      "agents/dqn_agent.py": "969a273b5d762a3b04e5ea31ea28b78370c9e79c976a37d3a1bcba89b0339442",
+      "agents/ppo_agent.py": "68842639ffa0983a67b8b4006a7ab1b3329688ab0561a2ebba1e44aa3d41f0ea",
+      "models/factory.py": "e355d9e87692f40a1f3fdd349bed2822524b22d0f8fddc6ebe4261808e2565a8",
+      "train/dqn.py": "14a29c422035ca9aa951cd18dcbf061f970dcbc3b918fb1f354682e1a66eccb6",
+      "train/ppo.py": "d5dbfb196c2d7a048e2c69b2b8404f81d959c07262e10be3ad8915a25b69cf36"
+    },
+    "task_id": "board9x9_10mines"
+  },
+  "srgn7o5f": {
+    "algorithm": "ppo",
+    "architecture": "fully_conv_3layer_64ch_11in",
+    "created_at": "2026-07-15T19:11:26.387795+00:00",
+    "git_commit": "67818515251cf56d826a2c55da25859d5830c14e",
+    "git_dirty": false,
+    "source_hashes": {
+      "agents/dqn_agent.py": "969a273b5d762a3b04e5ea31ea28b78370c9e79c976a37d3a1bcba89b0339442",
+      "agents/ppo_agent.py": "68842639ffa0983a67b8b4006a7ab1b3329688ab0561a2ebba1e44aa3d41f0ea",
+      "models/factory.py": "e355d9e87692f40a1f3fdd349bed2822524b22d0f8fddc6ebe4261808e2565a8",
+      "train/dqn.py": "14a29c422035ca9aa951cd18dcbf061f970dcbc3b918fb1f354682e1a66eccb6",
+      "train/ppo.py": "d5dbfb196c2d7a048e2c69b2b8404f81d959c07262e10be3ad8915a25b69cf36"
+    },
+    "task_id": "board9x9_10mines"
+  },
+  "st8ixqsc": {
+    "algorithm": "dqn",
+    "architecture": "global_skip_conv_3layer_64ch_11in",
+    "created_at": "2026-07-15T19:11:25.867498+00:00",
+    "git_commit": "67818515251cf56d826a2c55da25859d5830c14e",
+    "git_dirty": false,
+    "source_hashes": {
+      "agents/dqn_agent.py": "969a273b5d762a3b04e5ea31ea28b78370c9e79c976a37d3a1bcba89b0339442",
+      "agents/ppo_agent.py": "68842639ffa0983a67b8b4006a7ab1b3329688ab0561a2ebba1e44aa3d41f0ea",
+      "models/factory.py": "e355d9e87692f40a1f3fdd349bed2822524b22d0f8fddc6ebe4261808e2565a8",
+      "train/dqn.py": "14a29c422035ca9aa951cd18dcbf061f970dcbc3b918fb1f354682e1a66eccb6",
+      "train/ppo.py": "d5dbfb196c2d7a048e2c69b2b8404f81d959c07262e10be3ad8915a25b69cf36"
+    },
+    "task_id": "board9x9_10mines"
+  }
+}
