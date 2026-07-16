@@ -9,19 +9,12 @@
 
 \title{\projecttitle}
 \subtitle{\projectsubtitle}
-% Bypass beamer's default \and-separator (uneven spacing, no visual break)
+
 \author{Cristiano Corsi \quad\textbullet\quad Lorenzo Ceccanti}
 \institute{Symbolic and Evolutionary Artificial Intelligence (SEAI) \\ University of Pisa}
 \date{}
 
-% UniPi seal placed only on the title page, large and right-aligned on the
-% same line as the author names (never as a per-slide \logo). Overrides
-% metropolis' "author" template instead of using \titlegraphic (which would
-% sit above the title).
-%
-% Two independent knobs to fine-tune the logo without touching the macro
-% below: \titlelogoheight sets its absolute size, \titlelogotopskip adds a
-% top margin (gap between the title separator rule and the author/logo row).
+
 \newlength{\titlelogoheight}
 \setlength{\titlelogoheight}{2.2cm}
 \newlength{\titlelogotopskip}
@@ -32,9 +25,6 @@
   \hbox to \textwidth{%
     \usebeamerfont{author}\usebeamercolor[fg]{author}\insertauthor
     \hfil
-    % \includegraphics alone sits on the text baseline (image bottom-aligned
-    % with the names, which look "low" next to a 2.2cm-tall logo); valign=c
-    % centers it against the line instead.
     \adjustbox{valign=c}{\includegraphics[height=\titlelogoheight]{assets/logo_unipi}}%
   }%
 }
