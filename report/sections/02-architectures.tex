@@ -1,0 +1,104 @@
+% !TeX root = ../slides.tex
+% 02-architectures.tex
+
+\begin{frame}{Network architectures: state space encoding}
+  \begin{itemize}
+    \item Our original idea on how to represent the state space is based on the paper by
+    \textcite{wang2025minesweepercnn}. The author used a \alert{one-hot board encoding} (10 channels: values $0$–$8$
+    plus one channel for unrevealed cells) fed to a convolutional
+    $Q$-network.
+  \end{itemize}
+
+  \resizebox{0.98\textwidth}{!}{
+    \begin{tikzpicture}[font=\small]
+
+      % Input tensor
+      \node (input) at (0,0) {$[B,C,H,W]$};
+
+      % CNN block
+      \node[
+        draw,
+        rectangle,
+        minimum width=4.2cm,
+        minimum height=2.5cm,
+        align=center
+      ] (cnn) at (4.2,0) {
+        {\Large CNN}\\[0.25cm]
+        fully convolutional\\
+        (or with global features)
+      };
+
+      % Output values
+      \node[anchor=west] (outputs) at (8.4,0) {
+        $\left\{
+        \begin{aligned}
+          Q(s,a_0)
+          &\;/\;
+          \ell(s,a_0)
+          \\[0.25cm]
+          &\vdots
+          \\[0.25cm]
+          Q(s,a_{H\cdot W-1})
+          &\;/\;
+          \ell(s,a_{H\cdot W-1})
+        \end{aligned}
+        \right.$
+      };
+
+      % Arrows
+      \draw[->, thick]
+        (input.east) -- (cnn.west);
+
+      \draw[->, thick]
+        (cnn.east)
+        -- node[above] {$[B,H\cdot W]$}
+        (outputs.west);
+
+    \end{tikzpicture}
+  }
+
+  \begin{itemize}
+    \item In a second stage of development we added a constant channel, the 10th one, containing
+    the \textit{mine density}. This was done with the idea to let the network generalize well
+    to harder games. In this case, $C = 11$.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Design Choices for Stable Training}
+  \begin{itemize}
+    \item \texttt{player\_board} content is not re-usable as PyTorch index; otherwise, we might have the risk to override the wrong one-hot channel.
+    \begin{table}[h]
+      \centering
+      \begin{tabular}{cl}
+        \textbf{One-hot channel ID} & \textbf{Encoded value / meaning} \\
+        \midrule
+        $0,\ldots,8$ & Values $0,\ldots,8$ of \texttt{player\_board} \\
+        $9$          & $-2$: unrevealed cell \\
+        $10$         & Mine density \\
+        \bottomrule
+      \end{tabular}
+    \end{table}
+    \item \textbf{Safe first move}: if the first action hits a mine, the
+      board is regenerated from the same RNG (not reseeded) until the
+      first move is safe. This avoids penalizing the agent only due to \textit{its
+      bad luck}.
+    \item \textbf{Mines never revealed to the agent}: even at a losing
+      terminal step, the mine stays $-1$ only in the internal board; the
+      \texttt{player\_board} keeps it as $-2$. Loss is communicated
+      through the terminal reward alone, keeping the observation
+      alphabet consistent with the planned one-hot
+      encoding.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Architecture 1: Fully-convolutional CNN}
+  \begin{itemize}
+    \item inserire disegno esteso con tutti i blocchi e canali
+  \end{itemize}
+  \begin{highlightbox}{Why fully convolutional?}
+    A $1{\times}1$ conv head produces one scalar per cell $\Rightarrow$ the
+    same weights work for any $H \times W$ board. A feed-forward classification
+    head would have the issue to create space for a $W$ matrix whose shape
+    depend on the board size.
+  \end{highlightbox}
+\end{frame}
