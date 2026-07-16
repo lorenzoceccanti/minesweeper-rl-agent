@@ -4,7 +4,7 @@
 \begin{frame}{Minesweeper board as a customized MDP}
   \begin{itemize}
     \item Grid of $H \times W$ cells, $N$ hidden mines; revealed safe cells
-          show the count of adjacent mines ($0$–$8$).
+          show the count of adjacent mines ($0$–$8$). \textbf{Flags are not considered} in this environment.
     \item Agent's goal: uncover every safe cell without ever selecting a mine.
   \end{itemize}
 
@@ -42,7 +42,7 @@
   \small A $4\times4$ example after a loss. Three mines sit on this board.
 \end{frame}
 
-\begin{frame}{MDP formulation: the action space}
+\begin{frame}{MDP modelling: the action space}
   Every Python class extending the \texttt{gym.Env} base class must have the attributes \texttt{action\_space}
   and \texttt{observation\_space} used to redefine $A$ and $S$.
 \vspace{0.35cm} 
@@ -71,7 +71,7 @@
   \end{itemize}
 \end{frame}
 
-\begin{frame}{MDP formulation: the state space}
+\begin{frame}{MDP modelling: the state space}
 \begin{itemize}
   \item \textbf{State space} - \texttt{gym.spaces.Box(low=-2, high=8, shape=HxW)}: The state space of the custom MDP 
   corresponds to what the agent actually \textit{sees} when playing.
@@ -86,7 +86,7 @@
 \end{itemize}
 \end{frame}
 
-\begin{frame}{MDP formulation: the reward (first version)}
+\begin{frame}{MDP modelling: the reward (first version)}
 It's inspired by the paper \textcite{wang2025minesweepercnn}.
 \begin{table}
     \centering
@@ -108,4 +108,92 @@ It's inspired by the paper \textcite{wang2025minesweepercnn}.
     be opened. However, the reward is still $+1$ \textbf{independently} on the number of the \textbf{opened cells}.
     \item Huge boards get huge rewards, little boards get little rewards.
   \end{enumerate}
+\end{frame}
+
+\begin{frame}{\textit{Aside}: Minesweeper's flood-fill}
+  \twocol{
+    \centering
+    \textbf{Before} --- click $(2,2)$\\[0.15cm]
+
+    \begin{tikzpicture}[xscale=0.45, yscale=0.45]
+      \foreach \x in {0,...,4} {
+        \foreach \y in {0,...,4} {
+          \msc[minimum size=0.42cm]{\x}{-\y}{mshidden}{}
+        }
+      }
+
+      \msc[minimum size=0.42cm,draw=badred,ultra thick]
+           {2}{-2}{mshidden}{}
+    \end{tikzpicture}
+
+  }{
+    \centering
+    \textbf{After} --- cascade complete\\[0.15cm]
+
+    \begin{tikzpicture}[xscale=0.45, yscale=0.45]
+
+      % Row 0
+      \msc[minimum size=0.42cm]{0}{0}{mshidden}{}
+      \msc[minimum size=0.42cm]{1}{0}{mshidden}{}
+      \msc[minimum size=0.42cm]{2}{0}{mshidden}{}
+      \msc[minimum size=0.42cm]{3}{0}{mshidden}{}
+      \msc[minimum size=0.42cm]{4}{0}{mshidden}{}
+
+      % Row 1
+      \msc[minimum size=0.42cm]{0}{-1}{mshidden}{}
+      \msc[minimum size=0.42cm]{1}{-1}{msrevealed}{\msnum{1}}
+      \msc[minimum size=0.42cm]{2}{-1}{msrevealed}{\msnum{1}}
+      \msc[minimum size=0.42cm]{3}{-1}{msrevealed}{\msnum{1}}
+      \msc[minimum size=0.42cm]{4}{-1}{mshidden}{}
+
+      % Row 2
+      \msc[minimum size=0.42cm]{0}{-2}{mshidden}{}
+      \msc[minimum size=0.42cm]{1}{-2}{msrevealed}{\msnum{1}}
+      \msc[minimum size=0.42cm]{2}{-2}{msrevealed}{}
+      \msc[minimum size=0.42cm]{3}{-2}{msrevealed}{\msnum{1}}
+      \msc[minimum size=0.42cm]{4}{-2}{mshidden}{}
+
+      % Row 3
+      \msc[minimum size=0.42cm]{0}{-3}{mshidden}{}
+      \msc[minimum size=0.42cm]{1}{-3}{msrevealed}{\msnum{1}}
+      \msc[minimum size=0.42cm]{2}{-3}{msrevealed}{\msnum{1}}
+      \msc[minimum size=0.42cm]{3}{-3}{msrevealed}{\msnum{1}}
+      \msc[minimum size=0.42cm]{4}{-3}{mshidden}{}
+
+      % Row 4
+      \msc[minimum size=0.42cm]{0}{-4}{mshidden}{}
+      \msc[minimum size=0.42cm]{1}{-4}{mshidden}{}
+      \msc[minimum size=0.42cm]{2}{-4}{mshidden}{}
+      \msc[minimum size=0.42cm]{3}{-4}{mshidden}{}
+      \msc[minimum size=0.42cm]{4}{-4}{mshidden}{}
+
+    \end{tikzpicture}
+  }
+\vspace{0.2cm}
+\begin{itemize}
+  \item Imagine selecting a cell with no mines in its neighborhood (\textit{i.e. a 0 cell}).
+  
+  According to the game rules, all the adjacent connected cells are revealed.
+  \item Instead of relying on an inefficent recursive solution, we though about a iterative solution
+  \textit{stack-based}. The coords of the cells of the cells with no mine around are pushed
+  as soon as they are found, and popped as soon as their boundaries are explored. No more pushes
+  are done with one of this conditions: a mine is found, a numbered cell is found, the cell has already
+  been uncovered by a previous visit.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{MDP modelling: action masking + reward normalization}
+  \twocol{
+    \textbf{Action masking}
+      
+      To let the agent \textit{risk} more, Q-values
+      (for off-policy algorithms) or logits (for on policy algorithm)
+      are set to $-\infty$ before letting the agent perform the
+      next action.
+  }{
+    \textbf{Reward normalization}
+
+    With normalization, the rewards bounds are kept under control
+    whatever is the size of the board game. 
+  }
 \end{frame}
