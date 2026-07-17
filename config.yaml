@@ -54,7 +54,7 @@ ppo:
   # alternative: fully_conv_3layer_64ch_11in, global_skip_conv_3layer_64ch_11in 
   architecture_name: global_skip_conv_3layer_64ch_11in
   # number of hidden convolution channels (called F)
-  hidden_channels: 64
+  hidden_channels: 128
   # G size in the global_skip_connection architecture
   global_features_dim: 32
   # MLP hidden dimension of the critic head
