@@ -36,7 +36,7 @@ dqn:
     wandb_entity: null
     wandb_project: minesweeper-rl
   test:
-    checkpoint_path: checkpoints/dqn/best/best.pt
+    checkpoint_path: checkpoints/dqn/2026-07-16-16-36-14-best.pt
     board_height: 9
     board_width: 9
     n_mines: 10
@@ -46,6 +46,7 @@ dqn:
     agent_seed: 42
     moving_average_window: 50
     test_output_dir: plots/test
+    log_wandb: true
     wandb_project: minesweeper-rl
     wandb_entity: null
 
@@ -84,7 +85,7 @@ ppo:
     wandb_entity: null
     wandb_project: minesweeper-rl
   test:
-    checkpoint_path: checkpoints/ppo/best/best.pt
+    checkpoint_path: checkpoints/ppo/2026-07-17-00-10-49-best.pt
     board_height: 9
     board_width: 9
     n_mines: 10
@@ -94,6 +95,7 @@ ppo:
     agent_seed: 42
     moving_average_window: 50
     test_output_dir: plots/test
+    log_wandb: true
     wandb_project: minesweeper-rl
     wandb_entity: null
 
