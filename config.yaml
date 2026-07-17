@@ -54,29 +54,29 @@ ppo:
   # alternative: fully_conv_3layer_64ch_11in, global_skip_conv_3layer_64ch_11in 
   architecture_name: global_skip_conv_3layer_64ch_11in
   # number of hidden convolution channels (called F)
-  hidden_channels: 128
+  hidden_channels: 64
   # G size in the global_skip_connection architecture
-  global_features_dim: 64
+  global_features_dim: 32
   # MLP hidden dimension of the critic head
-  critic_hidden_size: 256
+  critic_hidden_size: 512
   train:
-    actor_learning_rate: 0.0002137795035981122
+    actor_learning_rate: 0.0002329198036719645
     agent_seed: 42
-    batch_size: 64
+    batch_size: 128
     board_height: 9
     board_width: 9
     checkpoint_dir: checkpoints/ppo
-    clip_epsilon: 0.1
-    critic_learning_rate: 0.0007465458238530321
+    clip_epsilon: 0.11342242325988612
+    critic_learning_rate: 0.0010799480548572082
     discount_factor: 0.95
     entropy_coefficient: 0.001
-    gae_lambda: 0.95
+    gae_lambda: 0.9066208126095492
     max_actor_grad_norm: 1.0
-    max_critic_grad_norm: 5.0
+    max_critic_grad_norm: 10.0
     n_episodes: 85000
-    n_mines: 10
+    n_mines: 25
     render_mode: null
-    rollout_steps: 2048
+    rollout_steps: 4096
     train_env_seed_start: 50000
     update_epochs: 3
     validation_episodes: 500
@@ -86,9 +86,9 @@ ppo:
     wandb_project: minesweeper-rl
   test:
     checkpoint_path: checkpoints/ppo/2026-07-17-00-10-49-best.pt
-    board_height: 9
-    board_width: 9
-    n_mines: 10
+    board_height: 7
+    board_width: 7
+    n_mines: 7
     test_seed_start: 1000000
     test_seed_count: 1000
     render_mode: null
