@@ -445,7 +445,146 @@ is mathematically equivalent to a LN layer.
 \end{frame}
 
 \begin{frame}{Architecture 2: \textit{Global-skip} architecture - the  global block}
-  inserire disegno della sola parte globale
+  \resizebox{1\textwidth}{!}{%
+  \begin{tikzpicture}[
+      font=\scriptsize,
+      >=Latex,
+      flowarrow/.style={
+          ->,
+          draw=cyan!70!blue,
+          line width=0.8pt
+      },
+      block/.style={
+          draw=cyan!70!blue,
+          line width=0.8pt,
+          align=center,
+          inner sep=5pt
+      },
+      smallblock/.style={
+          block,
+          minimum width=1.15cm,
+          minimum height=1.65cm
+      },
+      tensorlabel/.style={
+          align=center,
+          text=black
+      }
+  ]
+
+  % Global average pooling
+  \node[
+      block,
+      minimum width=4.25cm,
+      minimum height=3.25cm
+  ] (gap) {
+      {\large\textsc{Global Avg.\ Pooling}}\\[0.35cm]
+      $\forall\, b\in\{1,\dots,B\}$\\
+      $\forall\, c\in\{1,\dots,F\}$\\[0.35cm]
+      $\displaystyle
+      g_{b,c}
+      =
+      \frac{1}{HW}
+      \sum_{i=1}^{H}
+      \sum_{j=1}^{W}
+      F^{\mathrm{local}}_{b,c,i,j}
+      $
+  };
+
+  % Input
+  \coordinate (input) at ([xshift=-2.05cm]gap.west);
+
+  \draw[flowarrow]
+      (input) -- (gap.west);
+
+  \node[
+      tensorlabel,
+      anchor=east
+  ] at ([xshift=-0.15cm]gap.west) {
+      Local features\\
+      $[B,F,H,W]$
+  };
+
+  % Feed-forward
+  \node[
+      block,
+      right=1.15cm of gap,
+      minimum width=2.85cm,
+      minimum height=2.15cm
+  ] (ff) {
+      {\large Feed-Forward}\\[0.25cm]
+      $F\times G$\\
+      parameters
+  };
+
+  \draw[flowarrow]
+      (gap.east) -- node[above] {$B\times F$} (ff.west);
+
+  % Layer normalization
+  \node[
+      smallblock,
+      right=1.05cm of ff
+  ] (ln) {
+      {\large LN}
+  };
+
+  \draw[flowarrow]
+      (ff.east) -- node[above] {$B\times G$} (ln.west);
+
+  % Unsqueeze
+  \node[
+      block,
+      right=0.95cm of ln,
+      minimum width=2.15cm,
+      minimum height=1.65cm
+  ] (unsqueeze) {
+      {\large Unsqueeze}
+  };
+
+  \draw[flowarrow]
+      (ln.east) -- (unsqueeze.west);
+
+  % Expand
+  \node[
+      block,
+      right=2.15cm of unsqueeze,
+      minimum width=2.05cm,
+      minimum height=1.65cm
+  ] (expand) {
+      {\large Expand}
+  };
+
+  \draw[flowarrow]
+      (unsqueeze.east)
+      --
+      node[
+          above,
+          pos=0.45
+      ] {$[B,G,1,1]$}
+      (expand.west);
+
+  % Output
+  \coordinate (output) at ([xshift=2.65cm]expand.east);
+
+  \draw[flowarrow]
+      (expand.east)
+      --
+      node[above] {$[B,G,H,W]$}
+      (output);
+
+  \node[
+      tensorlabel,
+      anchor=west
+  ] at ([xshift=0.1cm]expand.east |- output) {};
+
+  \node[
+      tensorlabel,
+      anchor=west
+  ] at ([xshift=1.15cm,yshift=-0.48cm]expand.east) {
+      global features
+  };
+
+  \end{tikzpicture}%
+  }
   \begin{itemize}
     \item The section of the NN producing the local features should match local patterns
     around the cell. The global section now presented takes in input the output of the convolutional
@@ -456,5 +595,372 @@ is mathematically equivalent to a LN layer.
 \end{frame}
 
 \begin{frame}{Architecture 2: \textit{Global skip} architecture - the overall view}
-inserire disegno totale
+\resizebox{0.98\textwidth}{!}{%
+\begin{tikzpicture}[
+    font=\scriptsize,
+    >=Latex,
+    arrow/.style={
+        -{Latex[length=2.2mm,width=1.6mm]},
+        thick
+    },
+    flow/.style={
+        thick
+    },
+    block/.style={
+        draw,
+        thick,
+        align=center,
+        inner sep=4pt
+    },
+    topblock/.style={
+        block,
+        minimum height=2.35cm
+    },
+    qblock/.style={
+        block,
+        draw=badred,
+        text=badred,
+        minimum height=2.05cm
+    },
+    vblock/.style={
+        block,
+        draw=goodgreen,
+        text=goodgreen,
+        minimum height=2.05cm
+    },
+    tensor/.style={
+        font=\scriptsize,
+        inner sep=1.5pt,
+        fill=white
+    }
+]
+
+% ============================================================
+% Convolutional trunk
+% ============================================================
+
+\node[
+    topblock,
+    text width=2.85cm
+] (conv) {
+    \textbf{CONV}\\[1mm]
+    \texttt{channel\_in}: $C$\\
+    \texttt{channel\_out}: $F$\\
+    \texttt{kernel}: $3\times3$\\
+    \texttt{padding}: $1$\\
+    \texttt{stride}: $1$
+};
+
+\node[
+    topblock,
+    right=1.8cm of conv,
+    text width=1.75cm
+] (groupnorm) {
+    \textbf{GROUP}\\
+    \textbf{NORM}\\[1.5mm]
+    \texttt{num\_groups}: $1$\\
+    \texttt{num\_channels}: $F$
+};
+
+\node[
+    topblock,
+    right=1.05cm of groupnorm,
+    text width=1.25cm
+] (relu) {
+    \Large ReLU
+};
+
+\node[
+    topblock,
+    right=1.85cm of relu,
+    text width=2.75cm
+] (residual) {
+    \large{$\times 2$}\\[1.5mm]
+    \large{Residual}\\[1mm]
+    \large{Blocks}
+};
+
+\coordinate (inputstart)
+    at ($(conv.west)+(-1.85cm,0)$);
+
+\draw[arrow]
+    (inputstart)
+    --
+    node[tensor,above=4pt] {$[B,C,H,W]$}
+    (conv.west);
+
+\draw[arrow]
+    (conv.east)
+    --
+    node[tensor,above=4pt] {$[B,F,H,W]$}
+    (groupnorm.west);
+
+\draw[arrow]
+    (groupnorm.east)
+    --
+    (relu.west);
+
+\draw[arrow]
+    (relu.east)
+    --
+    node[tensor,above=4pt] {$[B,F,H,W]$}
+    (residual.west);
+
+
+% ============================================================
+% Local and global branches
+% ============================================================
+
+% Punto di diramazione del trunk
+\coordinate (localsplit)
+    at ($(conv.west)+(-0.5cm,-3.0cm)$);
+
+% Livello del ramo globale
+\coordinate (globalsplit)
+    at ($(localsplit)+(0,-1.65cm)$);
+
+% Uscita del residual trunk:
+% prima verticale fino a y = localsplit.y + 1.35cm, poi orizzontale a sinistra, poi giù
+\coordinate (trunkby)
+    at ($(localsplit)+(0,1.35cm)$);
+
+\draw[flow]
+    (residual.south)
+    --
+    (residual.south |- trunkby)
+    -|
+    (localsplit);
+
+\fill (localsplit) circle (1.35pt);
+
+% Diramazione verticale verso il global block
+\draw[flow]
+    (localsplit)
+    --
+    (globalsplit);
+
+\node[
+    block,
+    right=0.55cm of globalsplit,
+    text width=2.10cm,
+    minimum height=1.45cm
+] (globalblock) {
+    \large GLOBAL\\[0.5mm]
+    \large BLOCK
+};
+
+% Il CONCAT è centrato tra il ramo locale e quello globale
+\node[
+    block,
+    text width=2.35cm,
+    minimum height=2.55cm
+] (concat)
+    at ($(localsplit)+(6.25cm,-0.825cm)$) {
+    \Large CONCAT\\[1mm]
+    \large on \texttt{dim}$=1$
+};
+
+% Ingresso locale: perfettamente orizzontale
+\draw[arrow]
+    (localsplit)
+    --
+    node[
+        tensor,
+        above=4pt,
+        pos=0.60
+    ] {$[B,F,H,W]$}
+    ($(concat.west)+(0,0.825cm)$);
+
+% Ingresso del global block
+\draw[arrow]
+    (globalsplit)
+    --
+    (globalblock.west);
+
+% Uscita globale: perfettamente orizzontale
+\draw[arrow]
+    (globalblock.east)
+    --
+    node[
+        tensor,
+        above=4pt,
+        pos=0.50
+    ] {$[B,G,H,W]$}
+    ($(concat.west)+(0,-0.825cm)$);
+
+
+% ============================================================
+% Shared fused representation
+% ============================================================
+
+\coordinate (fusionsplit)
+    at ($(concat.east)+(1.15cm,0)$);
+
+\draw[flow]
+    (concat.east)
+    --
+    (fusionsplit);
+
+\fill
+    (fusionsplit)
+    circle (1.35pt);
+
+
+% ============================================================
+% Q-value branch
+% ============================================================
+
+\node[
+    qblock,
+    right=3.15cm of fusionsplit,
+    text width=2.55cm
+] (qconv) {
+    \textbf{CONV}\\[1mm]
+    \texttt{channel\_in}: $F+G$\\
+    \texttt{channel\_out}: $1$\\
+    \texttt{kernel}: $1\times1$\\
+    \texttt{padding}: $0$\\
+    \texttt{stride}: $1$
+};
+
+\node[
+    qblock,
+    right=1.75cm of qconv,
+    text width=1.65cm,
+    minimum height=1.35cm
+] (reshape) {
+    \textbf{RESHAPE}\\[1mm]
+    \texttt{dim}$=-1$
+};
+
+\coordinate (qend)
+    at ($(reshape.east)+(1.75cm,0)$);
+
+\draw[arrow]
+    (fusionsplit)
+    --
+    node[
+        tensor,
+        text=black,
+        above=4pt,
+        pos=0.50
+    ] {$[B,F+G,H,W]$}
+    (qconv.west);
+
+\draw[arrow,badred]
+    (qconv.east)
+    --
+    node[
+        tensor,
+        text=badred,
+        above=4pt
+    ] {$[B,1,H,W]$}
+    (reshape.west);
+
+\draw[arrow,badred]
+    (reshape.east)
+    --
+    node[
+        tensor,
+        text=badred,
+        above=4pt
+    ] {$[B,H\!\cdot\!W]$}
+    (qend);
+
+\node[
+    text=badred,
+    anchor=west
+] at ($(qend)+(0.12cm,0)$) {
+    \Large $Q$-values
+};
+
+
+% ============================================================
+% Value branch
+% ============================================================
+
+\coordinate (valueturn)
+    at ($(fusionsplit)+(0,-3.25cm)$);
+
+\node[
+    vblock,
+    right=1.45cm of valueturn,
+    text width=2.45cm
+] (pool) {
+    \textbf{AVG POOLING}\\[1mm]
+    $+$ \textbf{FLATTEN}\\[1mm]
+    \texttt{dim}$=1$
+};
+
+\node[
+    vblock,
+    right=2.85cm of pool,
+    text width=2.45cm
+] (feedforward) {
+    \textbf{FEED-FORWARD}\\[2mm]
+    parameters\\[1mm]
+    $[(F+G)\cdot16,K]$
+};
+
+\node[
+    vblock,
+    right=1.65cm of feedforward,
+    text width=1.70cm,
+    minimum height=1.65cm
+] (linear) {
+    \textbf{LINEAR}\\
+    \textbf{LAYER}\\[1mm]
+    $K\times1$
+};
+
+\coordinate (valueend)
+    at ($(linear.east)+(1.15cm,0)$);
+
+% Discesa verticale
+\draw[flow,black]
+    (fusionsplit)
+    --
+    (valueturn);
+
+% Ingresso orizzontale nel pooling
+\draw[arrow,black]
+    (valueturn)
+    --
+    (pool.west);
+
+\draw[arrow,goodgreen]
+    (pool.east)
+    --
+    node[
+        tensor,
+        text=goodgreen,
+        above=4pt,
+        pos=0.50
+    ] {$[B,(F+G)\cdot16]$}
+    (feedforward.west);
+
+\draw[arrow,goodgreen]
+    (feedforward.east)
+    --
+    node[
+        tensor,
+        text=goodgreen,
+        above=4pt
+    ] {$[B,K]$}
+    (linear.west);
+
+\draw[arrow,goodgreen]
+    (linear.east)
+    --
+    (valueend);
+
+\node[
+    text=goodgreen,
+    anchor=west
+] at ($(valueend)+(0.12cm,0)$) {
+    \Large $V(s)$
+};
+
+\end{tikzpicture}%
+}
 \end{frame}
