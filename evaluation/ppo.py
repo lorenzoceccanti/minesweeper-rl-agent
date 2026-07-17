@@ -8,6 +8,9 @@ from environment import minesweeper_env as mine
 from plot import test_plots
 from tracking import wandb_logger
 
+from pathlib import Path
+import csv
+
 
 def run(config: dict) -> dict:
     test_seeds = tuple(
@@ -43,6 +46,17 @@ def run(config: dict) -> dict:
     )
 
     episode_results = []
+    if config.get("save_csv", True):
+        checkpoint_name = Path(config["checkpoint_path"]).stem
+        output_dir = Path(config.get("dir_csv", "csv/dqn"))
+        output_dir.mkdir(parents=True, exist_ok=True)
+        if config["name_csv"] is None:
+            csv_path = output_dir / f"{checkpoint_name}_results.csv"
+        else:
+            csv_path = output_dir / f"{config["name_csv"]}_results.csv"
+        # elimina il vecchio csv, se esiste
+        if csv_path.exists():
+            csv_path.unlink()
 
     try:
         with tqdm(enumerate(test_seeds, start=1), total=len(test_seeds), desc="Testing", unit="ep") as pbar:
@@ -151,5 +165,12 @@ def run(config: dict) -> dict:
             architecture_name=config["architecture_name"],
             plot_paths=output_paths,
         )
-
+    if config.get("save_csv", True):
+        fieldsnames = ["episode", "seed", "won", "return", "length"]
+        with open(csv_path, mode="w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldsnames)
+            writer.writeheader()
+            for episode in episode_results:
+                writer.writerow({k: episode[k] for k in fieldsnames})
+        print(f"CSV file saved in: {csv_path}")
     return summary
