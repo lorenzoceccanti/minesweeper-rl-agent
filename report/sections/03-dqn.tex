@@ -1,0 +1,62 @@
+% !TeX root = ../slides.tex
+% 03-dqn.tex — DQN agent
+
+\begin{frame}{DRL algorithms: DQN}
+  \twocol{
+    \begin{itemize}
+      \item online $Q_\theta$ + \alert{target} $Q_{\theta^-}$ network
+        (two replicas of same architecture, 
+        
+        weights $\theta$ become
+        $\theta^-$ every \texttt{target\_update\_frequency})
+      \item replay buffer, capacity \texttt{replay\_buffer\_capacity}, uniform sampling
+      of a batch made of \texttt{batch\_size} transitions
+      \item $\varepsilon$-greedy exploration, \alert{masked} over already
+        revealed cells. Could be linearly or exponentially decayed (\texttt{epsilon\_decay\_type})
+        until \texttt{final\_epsilon}
+    \end{itemize}
+   }{
+    \textbf{Huber Loss}
+
+    \begin{itemize}
+      \item It's less sensitive to huge TD errors during the first
+      optimization steps. 
+      \item Gradient clipping to prevent exploding gradients in backprop.
+    \end{itemize}
+
+    \vspace{-0.3cm}
+    {
+    \[
+      \begin{aligned}
+        y
+        &=
+        R_{t+1}+\gamma(1-terminated)\\
+        &\quad\max_{a'\,:\,\text{masked}}
+        Q_{\theta^-}(s',a')
+      \end{aligned}
+    \]
+
+    \vspace{-0.3cm}
+
+    \[
+      \delta_{\mathrm{TD}}
+      =
+      y-Q_\theta(s,a)
+    \]
+
+    \vspace{-0.4cm}
+
+    \[
+      \mathcal{L}(\theta)
+      =
+      \begin{cases}
+        \dfrac{1}{2}\delta_{\mathrm{TD}}^2,
+        & \left|\delta_{\mathrm{TD}}\right|\leq 1,
+        \\[4pt]
+        \left|\delta_{\mathrm{TD}}\right|-\dfrac{1}{2},
+        & \left|\delta_{\mathrm{TD}}\right|>1.
+      \end{cases}
+    \]
+    }
+  }
+\end{frame}

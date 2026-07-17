@@ -443,3 +443,18 @@ to maintain the independence on the size of the grid. With \texttt{num\_groups} 
 is mathematically equivalent to a LN layer.
 \end{highlightbox}
 \end{frame}
+
+\begin{frame}{Architecture 2: \textit{Global-skip} architecture - the  global block}
+  inserire disegno della sola parte globale
+  \begin{itemize}
+    \item The section of the NN producing the local features should match local patterns
+    around the cell. The global section now presented takes in input the output of the convolutional
+    backbone and should generalize the status of the entire board. A global average pooling is used,
+    preserving a $4x4$ space dimension. This is a compromise between loosing completely the spatial
+    dimension and loosing completely the independence on the board shape.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Architecture 2: \textit{Global skip} architecture - the overall view}
+inserire disegno totale
+\end{frame}

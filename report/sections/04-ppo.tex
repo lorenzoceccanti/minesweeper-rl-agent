@@ -1,31 +1,32 @@
 % !TeX root = ../slides.tex
-% 07-ppo.tex — PPO agent, matching agents/ppo_agent.py.
+% 04-ppo.tex — PPO agent
 
-\section{PPO Agent}
-
-\begin{frame}{Proximal Policy Optimization \parencite{schulman2017ppo}}
+\begin{frame}{DRL algorithms: PPO - components}
   \twocol{
-    \textbf{Components} (\texttt{agents/ppo\_agent.py})
     \begin{itemize}
-      \item on-policy \alert{rollout buffer}: collect $1024$ steps, then
-        drain it into $10$ update epochs of $256$-sample minibatches;
-      \item separate \textbf{actor} and \textbf{critic} networks, separate
-        Adam optimizers ($\text{lr}_{\text{actor}}=2{\times}10^{-4}$,
-        $\text{lr}_{\text{critic}}=3{\times}10^{-3}$);
-      \item independent gradient-clip norms: actor $0.5$, critic $5.0$;
-      \item action masking on the actor logits before the categorical
-        distribution is built (train \emph{and} test).
+      \item \alert{rollout buffer}: A rollout is a sequence
+      of iteractions between an agent and the environment \textbf{collected
+      under the same current policy}. It can be imagined as \textit{watching
+      the agent playing the current game} and recording what is does. 
+      Its usage is a common practice with PPO algorithms according to
+      \href{https://stable-baselines3.readthedocs.io/en/master/modules/ppo.html\#notes}{Stable-Baselines3}.
     \end{itemize}
   }{
-    \textbf{Why on-policy?}
     \begin{itemize}
-      \item no replay buffer bias — every update uses data collected
-        under (close to) the current policy;
-      \item the clipped objective bounds how far one update can move
-        $\pi_\theta$ from the data-collecting policy, making on-policy
-        reuse across $10$ epochs stable.
+      \item separate \textbf{actor} and \textbf{critic} networks, separate
+        Adam optimizers. 
+      \item Shared CNN backbones as seen before, with the difference that the critic's value head
+        outputs a single $V(s)$.
+      \item independent gradient-clip norms.
+      \item both the learning rate and gradient norms are parametrized as:
+      \texttt{max\_actor\_grad\_norm}, \texttt{max\_critic\_grad\_norm}, \texttt{actor\_learning\_rate},
+      \texttt{critic\_learning\_rate}.
     \end{itemize}
   }
+\end{frame}
+
+\begin{frame}{DRL algorithms: PPO - main loops}
+
 \end{frame}
 
 \begin{frame}{Generalized Advantage Estimation \parencite{schulman2016gae}}
