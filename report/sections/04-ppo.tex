@@ -96,25 +96,3 @@
   
 \end{frame}
 
-\begin{frame}{PPO Training Loop}
-  \centering
-  \begin{tikzpicture}[node distance=0.7cm and 1.4cm,
-      component/.append style={minimum width=3.6cm, font=\small}]
-    \node[component] (collect) {Collect $1024$ steps\\masked $\pi_\theta$\\store $(s,a,\log\pi,r,V,d)$};
-    \node[component, right=of collect] (gae) {Compute GAE\\$A_t$, value targets};
-    \node[component, below=of gae, fill=goodgreen!20] (clear) {Clear buffer\\$\theta_{\text{old}} \gets \theta$};
-    \node[component, below=of collect] (update) {$10\times$ epochs\\minibatch $256$\\actor + critic loss};
-    \draw[flowarrow] (collect) -- (gae);
-    \draw[flowarrow] (gae) -- (clear);
-    \draw[flowarrow] (clear) -- (update);
-    \draw[flowarrow] (update) -- (collect);
-  \end{tikzpicture}
-
-  \vspace{0.3cm}
-  \begin{minipage}{0.85\textwidth}
-    \centering
-    Repeated until the training episode budget ($150{,}000$ episodes for
-    the headline run) is exhausted; periodic validation rollouts (masked,
-    greedy) pick the checkpoint with the best win rate.
-  \end{minipage}
-\end{frame}
