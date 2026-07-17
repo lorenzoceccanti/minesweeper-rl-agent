@@ -39,3 +39,4 @@ report/indent.log
 # Weights & Biases local run cache
 wandb/
 sweeps/logs/
+/csv
