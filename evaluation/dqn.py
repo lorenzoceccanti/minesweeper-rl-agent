@@ -48,7 +48,7 @@ def run(config: dict) -> dict:
     episode_results = []
     if config.get("save_csv", True):
         checkpoint_name = Path(config["checkpoint_path"]).stem
-        output_dir = Path(config.get("dir_csv"), "csv/dqn")
+        output_dir = Path(config.get("dir_csv", "csv/dqn"))
         output_dir.mkdir(parents=True, exist_ok=True)
         if config["name_csv"] is None:
             csv_path = output_dir / f"{checkpoint_name}_results.csv"
@@ -172,5 +172,5 @@ def run(config: dict) -> dict:
             writer.writeheader()
             for episode in episode_results:
                 writer.writerow({k: episode[k] for k in fieldsnames})
-        print(f"CSV file saved in: {csv_path}.")
+        print(f"CSV file saved in: {csv_path}")
     return summary
