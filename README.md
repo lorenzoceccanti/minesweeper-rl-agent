@@ -11,6 +11,9 @@ python main.py train --alg=ppo --h=9 --w=9 --m=10 --n-episodes=500
 # test (held-out evaluation of a saved checkpoint)
 python main.py test --alg=ppo --ckpt=checkpoints/*-best.pt --h=6 --w=6 --m=5
 
+# statistical tests
+python main.py stats --alpha 0.05
+
 # play interactively
 python main.py game --h=9 --w=9 --m=10
 ```
