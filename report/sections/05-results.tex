@@ -1,0 +1,171 @@
+\begin{frame}{Experimental Setup}
+  \begin{itemize}
+    \item Initial experiments were conducted with board $6 \times 6$, $5$ mines 
+    (density $\approx 13.9\%$) \alert{identical} for DQN and PPO. The metric
+    we aim to maximize is the \texttt{win\_rate}, defined as number of episodes
+    in which the agent won over the total number of test episodes. In this first phase,
+    we were able to achieve a max win rate of $\approx 80.1\%$ for DQN and $\approx 80.2\%$ for
+    PPO.
+    
+    Further experiments were conducted with boards $9 \times 9$ and $10$ mines.
+    \item disjoint RNG seed ranges for train / validation / held-out test
+    \item final evaluation: $1000$ held-out test episodes per agent
+    \item to conduct in a rigorous and ordered manner an experimental performance analysis,
+    we used the \href{https://wandb.ai/site/}{Weight and Biases} platform (academic plan) and its Python Library.
+    The source code interacting with W\&B to store the complete run logs was produced with
+    the help of Claude Opus 4.6 and Gemini 3.5 Flash.
+  \end{itemize}
+\end{frame}
+\begin{frame}{Statistical tests: Fixing DRL algorithm, \texttt{fully\_conv} VS \texttt{global\_skip\_conv}}
+Due to the nature of the environment, the metric we aimed to maximize is the win rate.
+Statistical test used: McNemar test; it's the equivalent of the
+Wilcoxon-signed rank test for binary events. The test focuses only on disagreeing episodes.
+
+\small{$c = $ \texttt{num\_episodes} won by $B$ \hspace{1.5em} $b$ \texttt{num\_episodes} won by $A$.
+
+\texttt{p\_value} = Probability of observing $c$ wins of B over $b+c$ total victories
+
+$ = P(X=c)$, $X \sim \text{Binom}(n=b+c, p=0.5)$. $\mathcal{H}_0: P(A:wins, B:lose) = P(A:lose, B:wins)$}
+
+  \textbf{DQN}
+  \vspace{-0.2em}
+  {\scriptsize
+  \centering
+  \setlength{\tabcolsep}{3pt}
+  \renewcommand{\arraystretch}{0.85}
+
+  \begin{tabular}{c|cccc}
+  \texttt{agent\_seed}
+  &
+  Win rate (\texttt{fully\_conv})
+  &
+  Win rate (\texttt{global\_skip})
+  &
+  $p$-value
+  &
+  Significant ($\alpha=0.05$)
+  \\
+  \hline
+  43 & 69\% & 63\% & $3.32 \times 10^{-3}$ & yes \\
+  44 & 67\% & 67\% & $0.88$                & no  \\
+  45 & 68\% & 67\% & $0.60$                & no
+  \end{tabular}
+
+\par}
+\vspace{0.15em}
+
+\textbf{PPO}
+\vspace{-0.2em}
+{\scriptsize
+\centering
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{0.85}
+
+\begin{tabular}{c|cccc}
+\texttt{agent\_seed}
+&
+Win rate (\texttt{fully\_conv})
+&
+Win rate (\texttt{global\_skip})
+&
+$p$-value
+&
+Significant ($\alpha=0.05$)
+\\
+\hline
+43 & 62\% & 72\% & $7.48 \times 10^{-8}$ & yes \\
+44 & 65\% & 67\% & $0.28$                & no  \\
+45 & 56\% & 65\% & $1.68 \times 10^{-6}$ & yes
+\end{tabular}
+
+\par}
+\end{frame}
+\begin{frame}{Statistical tests: Fixing architecture, DQN vs PPO}
+
+\textbf{\texttt{fully-conv}}
+  \vspace{-0.2em}
+  {\scriptsize
+  \centering
+  \setlength{\tabcolsep}{3pt}
+  \renewcommand{\arraystretch}{0.85}
+
+  \begin{tabular}{c|cccc}
+  \texttt{agent\_seed}
+  &
+  Win rate (DQN)
+  &
+  Win rate (PPO)
+  &
+  $p$-value
+  &
+  Significant ($\alpha=0.05$)
+  \\
+  \hline
+  43 & 69\% & 62\% & $8.23 \times 10^{-4}$ & yes \\
+  44 & 67\% & 65\% & $0.21$ & no  \\
+  45 & 68\% & 56\% & $8.26 \times 10^{-10}$ & yes
+  \end{tabular}
+
+\par}
+\vspace{0.15em}
+
+\textbf{\texttt{global-skip}}
+\vspace{-0.2em}
+{\scriptsize
+\centering
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{0.85}
+
+\begin{tabular}{c|cccc}
+\texttt{agent\_seed}
+&
+Win rate (DQN)
+&
+Win rate (PPO)
+&
+$p$-value
+&
+Significant ($\alpha=0.05$)
+\\
+\hline
+43 & 63\% & 72\% & $1.52 \times 10^{-6}$ & yes \\
+44 & 67\% & 67\% & $1$                & no  \\
+45 & 67\% & 65\% & $0.36$ & no
+\end{tabular}
+
+\par}
+
+\textit{Observations}:
+\begin{itemize}
+  \item There's a strong statistical evidence about the sinergy
+  between PPO and the \texttt{global\_skip} architecture.
+  \item DQN algorithm performs \textit{slightly well} by using \texttt{fully\_conv}
+  architecture, even though there's not a strong statistical evidence.
+\end{itemize}
+
+
+\end{frame}
+\begin{frame}{Future works}
+During this project we reasoned a lot how to generalize
+to wider boards. Basing on what we've studied until now, we put our maximum
+effort to train and use at inference time the networks independently on the board size.
+
+Future work might include:
+\begin{itemize}
+  \item \textit{curriculum learning}:
+models learn gradually, mimicking how humans learn
+(starting from the basics and moving on to complex topics). The idea
+would be graudally adapt the learning starting from little to bigger
+and more \textit{mine dense} boards.
+  \item \textit{self-attention} in global section of the \texttt{global\_skip\_connection}
+  architecture. A self-attention layer would allow to each cell to measure 
+  the impact of all the other cells of the boards, not only to the ones of its neighboroud.
+  It might preserve spatial features better than a 4x4 global average pooling.
+\end{itemize}
+
+
+\end{frame}
+\begin{frame}{TikZ drawings: acknowledgments}
+The \LaTeX code in charge of producing TikZ drawings for neural architecture blocks
+or other drawings has been produced with the help of GPT 5.6-Sol and Gemini Flash 3.5.
+\end{frame}

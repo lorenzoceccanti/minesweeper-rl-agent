@@ -1,0 +1,966 @@
+% !TeX root = ../slides.tex
+% 02-architectures.tex
+
+\begin{frame}{Network architectures: state space encoding}
+  \begin{itemize}
+    \item Our original idea on how to represent the state space is based on the paper by
+    \textcite{wang2025minesweepercnn}. The author used a \alert{one-hot board encoding} (10 channels: values $0$–$8$
+    plus one channel for unrevealed cells) fed to a convolutional
+    $Q$-network.
+  \end{itemize}
+
+  \resizebox{0.98\textwidth}{!}{
+    \begin{tikzpicture}[font=\small]
+
+      % Input tensor
+      \node (input) at (0,0) {$[B,C,H,W]$};
+
+      % CNN block
+      \node[
+        draw,
+        rectangle,
+        minimum width=4.2cm,
+        minimum height=2.5cm,
+        align=center
+      ] (cnn) at (4.2,0) {
+        {\Large CNN}\\[0.25cm]
+        fully convolutional\\
+        (or with global features)
+      };
+
+      % Output values
+      \node[anchor=west] (outputs) at (8.4,0) {
+        $\left\{
+        \begin{aligned}
+          Q(s,a_0)
+          &\;/\;
+          \ell(s,a_0)
+          \\[0.25cm]
+          &\vdots
+          \\[0.25cm]
+          Q(s,a_{H\cdot W-1})
+          &\;/\;
+          \ell(s,a_{H\cdot W-1})
+        \end{aligned}
+        \right.$
+      };
+
+      % Arrows
+      \draw[->, thick]
+        (input.east) -- (cnn.west);
+
+      \draw[->, thick]
+        (cnn.east)
+        -- node[above] {$[B,H\cdot W]$}
+        (outputs.west);
+
+    \end{tikzpicture}
+  }
+
+  \begin{itemize}
+    \item In a second stage of development we added a constant channel, the 10th one, containing
+    the \textit{mine density}. This was done with the idea to let the network generalize well
+    to harder games. In this case, $C = 11$.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Design Choices for Stable Training}
+  \begin{itemize}
+    \item \texttt{player\_board} content is not re-usable as PyTorch index; otherwise, we might have the risk to override the wrong one-hot channel.
+    \begin{table}[h]
+      \centering
+      \begin{tabular}{cl}
+        \textbf{One-hot channel ID} & \textbf{Encoded value / meaning} \\
+        \midrule
+        $0,\ldots,8$ & Values $0,\ldots,8$ of \texttt{player\_board} \\
+        $9$          & $-2$: unrevealed cell \\
+        $10$         & Mine density \\
+        \bottomrule
+      \end{tabular}
+    \end{table}
+    \item \textbf{Safe first move}: if the first action hits a mine, the
+      board is regenerated from the same RNG (not reseeded) until the
+      first move is safe. This avoids penalizing the agent only due to \textit{its
+      bad luck}.
+    \item \textbf{Mines never revealed to the agent}: even at a losing
+      terminal step, the mine stays $-1$ only in the internal board; the
+      \texttt{player\_board} keeps it as $-2$. Loss is communicated
+      through the terminal reward alone, keeping the observation
+      alphabet consistent with the planned one-hot
+      encoding.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Architecture 1: Fully-convolutional CNN}
+\resizebox{0.98\textwidth}{!}{%
+\begin{tikzpicture}[
+  font=\scriptsize,
+  convorange/.style={
+    draw=archorange,
+    text=archorange,
+    thick,
+    align=center,
+    font=\scriptsize,
+    text width=1.75cm,
+    minimum height=2.5cm,
+    inner sep=3pt
+  },
+  reluorange/.style={
+    draw=archorange,
+    text=archorange,
+    thick,
+    align=center,
+    font=\footnotesize,
+    minimum width=0.85cm,
+    minimum height=0.85cm,
+    inner sep=2pt
+  },
+  convblack/.style={
+    draw=black,
+    text=black,
+    thick,
+    align=center,
+    font=\scriptsize,
+    text width=1.75cm,
+    minimum height=2.5cm,
+    inner sep=3pt
+  },
+  reshape/.style={
+    draw=black,
+    text=black,
+    thick,
+    align=center,
+    font=\footnotesize,
+    minimum width=2.2cm,
+    minimum height=1.0cm,
+    inner sep=3pt
+  },
+  orangeflow/.style={
+    ->,
+    thick,
+    draw=archorange
+  },
+  orangeline/.style={
+    thick,
+    draw=archorange
+  },
+  blackflow/.style={
+    ->,
+    thick,
+    draw=black
+  },
+  tensororange/.style={
+    font=\tiny,
+    text=archorange,
+    fill=white,
+    inner xsep=0.8pt,
+    inner ysep=0.3pt
+  },
+  tensorblack/.style={
+    font=\tiny,
+    text=black,
+    fill=white,
+    inner xsep=0.8pt,
+    inner ysep=0.3pt
+  }
+]
+
+% Input tensor
+\node[text=archorange, font=\scriptsize] (input)
+  {$[B,C,H,W]$};
+
+% First convolution
+\node[convorange, right=1.05cm of input] (conv1) {
+  \textbf{Conv}\\
+  channels in: $C$\\
+  channels out: $F$\\
+  kernel: $3\times3$\\
+  padding: $1$\\
+  stride: $1$
+};
+
+% First ReLU
+\node[reluorange, right=1.55cm of conv1] (relu1) {ReLU};
+
+% Second convolution
+\node[convorange, right=1.55cm of relu1] (conv2) {
+  \textbf{Conv}\\
+  channels in: $F$\\
+  channels out: $F$\\
+  kernel: $3\times3$\\
+  padding: $1$\\
+  stride: $1$
+};
+
+% Second ReLU
+\node[reluorange, right=1.55cm of conv2] (relu2) {ReLU};
+
+% Third convolution
+\node[convorange, right=1.55cm of relu2] (conv3) {
+  \textbf{Conv}\\
+  channels in: $F$\\
+  channels out: $F$\\
+  kernel: $3\times3$\\
+  padding: $1$\\
+  stride: $1$
+};
+
+% Third ReLU
+\node[reluorange, right=1.55cm of conv3] (relu3) {ReLU};
+
+% Punto di branching: ultimo punto del percorso arancione
+\coordinate (split) at ($(relu3.east)+(1.05cm,0)$);
+
+% Local features solo come testo, senza linea arancione fino a lui
+\node[
+  text=archorange,
+  font=\scriptsize,
+  align=left,
+  right=0.22cm of split
+] (local) {
+  local\\
+  features
+};
+
+% Upper path
+\draw[orangeflow]
+  (input.east) -- (conv1.west);
+
+\draw[orangeflow]
+  (conv1.east)
+  -- node[midway,above=5pt,tensororange] {$[B,F,H,W]$}
+  (relu1.west);
+
+\draw[orangeflow]
+  (relu1.east)
+  -- node[midway,above=5pt,tensororange] {$[B,F,H,W]$}
+  (conv2.west);
+
+\draw[orangeflow]
+  (conv2.east)
+  -- node[midway,above=5pt,tensororange] {$[B,F,H,W]$}
+  (relu2.west);
+
+\draw[orangeflow]
+  (relu2.east)
+  -- node[midway,above=5pt,tensororange] {$[B,F,H,W]$}
+  (conv3.west);
+
+\draw[orangeflow]
+  (conv3.east)
+  -- node[midway,above=5pt,tensororange] {$[B,F,H,W]$}
+  (relu3.west);
+
+% Ultimo tratto arancione: si ferma allo split
+\draw[orangeline]
+  (relu3.east)
+  -- node[pos=0.72,above=5pt,tensororange] {$[B,F,H,W]$}
+  (split);
+
+% Output head
+\node[
+  convblack,
+  below left=2.45cm and 0.55cm of split
+] (head) {
+  \textbf{Conv}\\
+  channels in: $F$\\
+  channels out: $1$\\
+  kernel: $1\times1$\\
+  padding: $0$\\
+  stride: $1$
+};
+
+% Reshape
+\node[reshape, left=1.75cm of head] (reshapeop) {
+  Reshape\\
+  $(\mathrm{dim}=1)$
+};
+
+% Final output
+\node[
+  text=black,
+  font=\scriptsize,
+  align=center,
+  left=1.75cm of reshapeop
+] (output) {
+  $Q$-values\\
+  or logits $\ell(s,a)$
+};
+
+% Gomito del branch basso
+\coordinate (elbow) at (split |- head.east);
+
+% Branch nero
+\draw[blackflow]
+  (split)
+  -- node[pos=0.45,right=3pt,tensorblack] {$[B,F,H,W]$}
+  (elbow)
+  -- (head.east);
+
+% Output head arrows
+\draw[blackflow]
+  (head.west)
+  -- node[midway,above=5pt,tensorblack] {$[B,1,H,W]$}
+  (reshapeop.east);
+
+\draw[blackflow]
+  (reshapeop.west)
+  -- node[midway,above=5pt,tensorblack] {$[B,H\!\cdot\!W]$}
+  (output.east);
+
+\end{tikzpicture}%
+}
+\begin{highlightbox}{Why fully convolutional?}
+    A $1{\times}1$ conv head produces one scalar per cell $\Rightarrow$ the
+    same weights work for any $H \times W$ board. A feed-forward classification
+    head would have the issue to create space for a $W$ matrix whose shape
+    depend on the board size.
+\end{highlightbox}
+\end{frame}
+
+\begin{frame}{Architecture 2: \textit{Global-skip} architecture - the residual block}
+\resizebox{0.98\textwidth}{!}{%
+\begin{tikzpicture}[
+    font=\scriptsize,
+    >=Latex,
+    block/.style={
+        draw=black,
+        thick,
+        align=center,
+        minimum height=2.7cm,
+        inner sep=4pt
+    },
+    conv/.style={
+        block,
+        text width=2.25cm
+    },
+    norm/.style={
+        block,
+        text width=1.95cm
+    },
+    relu/.style={
+        block,
+        text width=1.35cm,
+        font=\large
+    },
+    sum/.style={
+        draw=black,
+        thick,
+        circle,
+        minimum size=0.62cm,
+        inner sep=0pt,
+        font=\Large
+    },
+    flow/.style={
+        ->,
+        thick
+    },
+    skip/.style={
+        ->,
+        thick,
+        rounded corners=5pt
+    },
+    node distance=0.72cm
+]
+
+% Input coordinate
+\coordinate (input) at (0,0);
+
+% Main residual branch
+\node[conv, right=0.55cm of input] (conv1) {%
+    \textbf{Conv}\\[2pt]
+    channel-in: $F$\\
+    channel-out: $F$\\
+    kernel: $3\times3$\\
+    padding: $1$\\
+    stride: $1$
+};
+
+\node[norm, right=of conv1] (norm1) {%
+    \textbf{Group Norm}\\[5pt]
+    num\_groups: $1$\\
+    n\_channels: $F$
+};
+
+\node[relu, right=of norm1] (relu1) {\textbf{ReLU}};
+
+\node[conv, right=of relu1] (conv2) {%
+    \textbf{Conv}\\[2pt]
+    channel-in: $F$\\
+    channel-out: $F$\\
+    kernel: $3\times3$\\
+    padding: $1$\\
+    stride: $1$
+};
+
+\node[norm, right=of conv2] (norm2) {%
+    \textbf{Group Norm}\\[5pt]
+    num\_groups: $1$\\
+    n\_channels: $F$
+};
+
+\node[sum, right=0.68cm of norm2] (add) {$+$};
+
+\node[relu, right=0.68cm of add] (relu2) {\textbf{ReLU}};
+
+% Main arrows
+\draw[flow] (input) -- (conv1.west);
+\draw[flow] (conv1.east) -- (norm1.west);
+\draw[flow] (norm1.east) -- (relu1.west);
+\draw[flow] (relu1.east) -- (conv2.west);
+\draw[flow] (conv2.east) -- (norm2.west);
+\draw[flow] (norm2.east) -- (add.west);
+\draw[flow] (add.east) -- (relu2.west);
+
+% Residual connection
+\coordinate (skipstart) at ($(input)!0.55!(conv1.west)$);
+\coordinate (skipbottom) at ($(skipstart)+(0,-1.95cm)$);
+\coordinate (addbottom) at ($(add.south)+(0,-1.65cm)$);
+
+\draw[skip]
+    (skipstart)
+    -- (skipbottom)
+    -- (addbottom)
+    -- (add.south);
+
+% Input and output tensor dimensions
+\node[anchor=south east, font=\footnotesize]
+    at ($(skipstart)+(-0.08cm,0.18cm)$)
+    {$[B,F,H,W]$};
+
+\coordinate (output) at ($(relu2.east)+(1.35cm,0)$);
+\draw[flow] (relu2.east) -- (output);
+
+\node[anchor=south, font=\footnotesize]
+    at ($(relu2.east)!0.56!(output)+(0.5,0.18cm)$)
+    {$[B,F,H,W]$};
+
+\end{tikzpicture}%
+}
+\begin{highlightbox}{Why a group norm?}
+The GN is commonly used with 4D tensors in CV, and for our purposes it allowed us 
+to maintain the independence on the size of the grid. With \texttt{num\_groups} $= 1$, the BN
+is mathematically equivalent to a LN layer.
+\end{highlightbox}
+\end{frame}
+
+\begin{frame}{Architecture 2: \textit{Global-skip} architecture - the  global block}
+  \resizebox{1\textwidth}{!}{%
+  \begin{tikzpicture}[
+      font=\scriptsize,
+      >=Latex,
+      flowarrow/.style={
+          ->,
+          draw=cyan!70!blue,
+          line width=0.8pt
+      },
+      block/.style={
+          draw=cyan!70!blue,
+          line width=0.8pt,
+          align=center,
+          inner sep=5pt
+      },
+      smallblock/.style={
+          block,
+          minimum width=1.15cm,
+          minimum height=1.65cm
+      },
+      tensorlabel/.style={
+          align=center,
+          text=black
+      }
+  ]
+
+  % Global average pooling
+  \node[
+      block,
+      minimum width=4.25cm,
+      minimum height=3.25cm
+  ] (gap) {
+      {\large\textsc{Global Avg.\ Pooling}}\\[0.35cm]
+      $\forall\, b\in\{1,\dots,B\}$\\
+      $\forall\, c\in\{1,\dots,F\}$\\[0.35cm]
+      $\displaystyle
+      g_{b,c}
+      =
+      \frac{1}{HW}
+      \sum_{i=1}^{H}
+      \sum_{j=1}^{W}
+      F^{\mathrm{local}}_{b,c,i,j}
+      $
+  };
+
+  % Input
+  \coordinate (input) at ([xshift=-2.05cm]gap.west);
+
+  \draw[flowarrow]
+      (input) -- (gap.west);
+
+  \node[
+      tensorlabel,
+      anchor=east
+  ] at ([xshift=-0.15cm]gap.west) {
+      Local features\\
+      $[B,F,H,W]$
+  };
+
+  % Feed-forward
+  \node[
+      block,
+      right=1.15cm of gap,
+      minimum width=2.85cm,
+      minimum height=2.15cm
+  ] (ff) {
+      {\large Feed-Forward}\\[0.25cm]
+      $F\times G$\\
+      parameters
+  };
+
+  \draw[flowarrow]
+      (gap.east) -- node[above] {$B\times F$} (ff.west);
+
+  % Layer normalization
+  \node[
+      smallblock,
+      right=1.05cm of ff
+  ] (ln) {
+      {\large LN}
+  };
+
+  \draw[flowarrow]
+      (ff.east) -- node[above] {$B\times G$} (ln.west);
+
+  % Unsqueeze
+  \node[
+      block,
+      right=0.95cm of ln,
+      minimum width=2.15cm,
+      minimum height=1.65cm
+  ] (unsqueeze) {
+      {\large Unsqueeze}
+  };
+
+  \draw[flowarrow]
+      (ln.east) -- (unsqueeze.west);
+
+  % Expand
+  \node[
+      block,
+      right=2.15cm of unsqueeze,
+      minimum width=2.05cm,
+      minimum height=1.65cm
+  ] (expand) {
+      {\large Expand}
+  };
+
+  \draw[flowarrow]
+      (unsqueeze.east)
+      --
+      node[
+          above,
+          pos=0.45
+      ] {$[B,G,1,1]$}
+      (expand.west);
+
+  % Output
+  \coordinate (output) at ([xshift=2.65cm]expand.east);
+
+  \draw[flowarrow]
+      (expand.east)
+      --
+      node[above] {$[B,G,H,W]$}
+      (output);
+
+  \node[
+      tensorlabel,
+      anchor=west
+  ] at ([xshift=0.1cm]expand.east |- output) {};
+
+  \node[
+      tensorlabel,
+      anchor=west
+  ] at ([xshift=1.15cm,yshift=-0.48cm]expand.east) {
+      global features
+  };
+
+  \end{tikzpicture}%
+  }
+  \begin{itemize}
+    \item The section of the NN producing the local features should match local patterns
+    around the cell. The global section now presented takes in input the output of the convolutional
+    backbone and should generalize the status of the entire board. A global average pooling is used,
+    preserving a $4x4$ space dimension. This is a compromise between loosing completely the spatial
+    dimension and loosing completely the independence on the board shape.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Architecture 2: \textit{Global skip} architecture - the overall view}
+\resizebox{0.98\textwidth}{!}{%
+\begin{tikzpicture}[
+    font=\scriptsize,
+    >=Latex,
+    arrow/.style={
+        -{Latex[length=2.2mm,width=1.6mm]},
+        thick
+    },
+    flow/.style={
+        thick
+    },
+    block/.style={
+        draw,
+        thick,
+        align=center,
+        inner sep=4pt
+    },
+    topblock/.style={
+        block,
+        minimum height=2.35cm
+    },
+    qblock/.style={
+        block,
+        draw=badred,
+        text=badred,
+        minimum height=2.05cm
+    },
+    vblock/.style={
+        block,
+        draw=goodgreen,
+        text=goodgreen,
+        minimum height=2.05cm
+    },
+    tensor/.style={
+        font=\scriptsize,
+        inner sep=1.5pt,
+        fill=white
+    }
+]
+
+% ============================================================
+% Convolutional trunk
+% ============================================================
+
+\node[
+    topblock,
+    text width=2.85cm
+] (conv) {
+    \textbf{CONV}\\[1mm]
+    \texttt{channel\_in}: $C$\\
+    \texttt{channel\_out}: $F$\\
+    \texttt{kernel}: $3\times3$\\
+    \texttt{padding}: $1$\\
+    \texttt{stride}: $1$
+};
+
+\node[
+    topblock,
+    right=1.8cm of conv,
+    text width=1.75cm
+] (groupnorm) {
+    \textbf{GROUP}\\
+    \textbf{NORM}\\[1.5mm]
+    \texttt{num\_groups}: $1$\\
+    \texttt{num\_channels}: $F$
+};
+
+\node[
+    topblock,
+    right=1.05cm of groupnorm,
+    text width=1.25cm
+] (relu) {
+    \Large ReLU
+};
+
+\node[
+    topblock,
+    right=1.85cm of relu,
+    text width=2.75cm
+] (residual) {
+    \large{$\times 2$}\\[1.5mm]
+    \large{Residual}\\[1mm]
+    \large{Blocks}
+};
+
+\coordinate (inputstart)
+    at ($(conv.west)+(-1.85cm,0)$);
+
+\draw[arrow]
+    (inputstart)
+    --
+    node[tensor,above=4pt] {$[B,C,H,W]$}
+    (conv.west);
+
+\draw[arrow]
+    (conv.east)
+    --
+    node[tensor,above=4pt] {$[B,F,H,W]$}
+    (groupnorm.west);
+
+\draw[arrow]
+    (groupnorm.east)
+    --
+    (relu.west);
+
+\draw[arrow]
+    (relu.east)
+    --
+    node[tensor,above=4pt] {$[B,F,H,W]$}
+    (residual.west);
+
+
+% ============================================================
+% Local and global branches
+% ============================================================
+
+% Punto di diramazione del trunk
+\coordinate (localsplit)
+    at ($(conv.west)+(-0.5cm,-3.0cm)$);
+
+% Livello del ramo globale
+\coordinate (globalsplit)
+    at ($(localsplit)+(0,-1.65cm)$);
+
+% Uscita del residual trunk:
+% prima verticale fino a y = localsplit.y + 1.35cm, poi orizzontale a sinistra, poi giù
+\coordinate (trunkby)
+    at ($(localsplit)+(0,1.35cm)$);
+
+\draw[flow]
+    (residual.south)
+    --
+    (residual.south |- trunkby)
+    -|
+    (localsplit);
+
+\fill (localsplit) circle (1.35pt);
+
+% Diramazione verticale verso il global block
+\draw[flow]
+    (localsplit)
+    --
+    (globalsplit);
+
+\node[
+    block,
+    right=0.55cm of globalsplit,
+    text width=2.10cm,
+    minimum height=1.45cm
+] (globalblock) {
+    \large GLOBAL\\[0.5mm]
+    \large BLOCK
+};
+
+% Il CONCAT è centrato tra il ramo locale e quello globale
+\node[
+    block,
+    text width=2.35cm,
+    minimum height=2.55cm
+] (concat)
+    at ($(localsplit)+(6.25cm,-0.825cm)$) {
+    \Large CONCAT\\[1mm]
+    \large on \texttt{dim}$=1$
+};
+
+% Ingresso locale: perfettamente orizzontale
+\draw[arrow]
+    (localsplit)
+    --
+    node[
+        tensor,
+        above=4pt,
+        pos=0.60
+    ] {$[B,F,H,W]$}
+    ($(concat.west)+(0,0.825cm)$);
+
+% Ingresso del global block
+\draw[arrow]
+    (globalsplit)
+    --
+    (globalblock.west);
+
+% Uscita globale: perfettamente orizzontale
+\draw[arrow]
+    (globalblock.east)
+    --
+    node[
+        tensor,
+        above=4pt,
+        pos=0.50
+    ] {$[B,G,H,W]$}
+    ($(concat.west)+(0,-0.825cm)$);
+
+
+% ============================================================
+% Shared fused representation
+% ============================================================
+
+\coordinate (fusionsplit)
+    at ($(concat.east)+(1.15cm,0)$);
+
+\draw[flow]
+    (concat.east)
+    --
+    (fusionsplit);
+
+\fill
+    (fusionsplit)
+    circle (1.35pt);
+
+
+% ============================================================
+% Q-value branch
+% ============================================================
+
+\node[
+    qblock,
+    right=3.15cm of fusionsplit,
+    text width=2.55cm
+] (qconv) {
+    \textbf{CONV}\\[1mm]
+    \texttt{channel\_in}: $F+G$\\
+    \texttt{channel\_out}: $1$\\
+    \texttt{kernel}: $1\times1$\\
+    \texttt{padding}: $0$\\
+    \texttt{stride}: $1$
+};
+
+\node[
+    qblock,
+    right=1.75cm of qconv,
+    text width=1.65cm,
+    minimum height=1.35cm
+] (reshape) {
+    \textbf{RESHAPE}\\[1mm]
+    \texttt{dim}$=-1$
+};
+
+\coordinate (qend)
+    at ($(reshape.east)+(1.75cm,0)$);
+
+\draw[arrow]
+    (fusionsplit)
+    --
+    node[
+        tensor,
+        text=black,
+        above=4pt,
+        pos=0.50
+    ] {$[B,F+G,H,W]$}
+    (qconv.west);
+
+\draw[arrow,badred]
+    (qconv.east)
+    --
+    node[
+        tensor,
+        text=badred,
+        above=4pt
+    ] {$[B,1,H,W]$}
+    (reshape.west);
+
+\draw[arrow,badred]
+    (reshape.east)
+    --
+    node[
+        tensor,
+        text=badred,
+        above=4pt
+    ] {$[B,H\!\cdot\!W]$}
+    (qend);
+
+\node[
+    text=badred,
+    anchor=west
+] at ($(qend)+(0.12cm,0)$) {
+    \Large $Q$-values
+};
+
+
+% ============================================================
+% Value branch
+% ============================================================
+
+\coordinate (valueturn)
+    at ($(fusionsplit)+(0,-3.25cm)$);
+
+\node[
+    vblock,
+    right=1.45cm of valueturn,
+    text width=2.45cm
+] (pool) {
+    \textbf{AVG POOLING}\\[1mm]
+    $+$ \textbf{FLATTEN}\\[1mm]
+    \texttt{dim}$=1$
+};
+
+\node[
+    vblock,
+    right=2.85cm of pool,
+    text width=2.45cm
+] (feedforward) {
+    \textbf{FEED-FORWARD}\\[2mm]
+    parameters\\[1mm]
+    $[(F+G)\cdot16,K]$
+};
+
+\node[
+    vblock,
+    right=1.65cm of feedforward,
+    text width=1.70cm,
+    minimum height=1.65cm
+] (linear) {
+    \textbf{LINEAR}\\
+    \textbf{LAYER}\\[1mm]
+    $K\times1$
+};
+
+\coordinate (valueend)
+    at ($(linear.east)+(1.15cm,0)$);
+
+% Discesa verticale
+\draw[flow,black]
+    (fusionsplit)
+    --
+    (valueturn);
+
+% Ingresso orizzontale nel pooling
+\draw[arrow,black]
+    (valueturn)
+    --
+    (pool.west);
+
+\draw[arrow,goodgreen]
+    (pool.east)
+    --
+    node[
+        tensor,
+        text=goodgreen,
+        above=4pt,
+        pos=0.50
+    ] {$[B,(F+G)\cdot16]$}
+    (feedforward.west);
+
+\draw[arrow,goodgreen]
+    (feedforward.east)
+    --
+    node[
+        tensor,
+        text=goodgreen,
+        above=4pt
+    ] {$[B,K]$}
+    (linear.west);
+
+\draw[arrow,goodgreen]
+    (linear.east)
+    --
+    (valueend);
+
+\node[
+    text=goodgreen,
+    anchor=west
+] at ($(valueend)+(0.12cm,0)$) {
+    \Large $V(s)$
+};
+
+\end{tikzpicture}%
+}
+\end{frame}
