@@ -49,7 +49,6 @@ dqn:
     save_csv: true
     dir_csv: csv/dqn 
     name_csv: null
-    log_wandb: false
     wandb_project: minesweeper-rl
     wandb_entity: null
 
