@@ -60,7 +60,7 @@ def test_registry_register_and_save_load_round_trip(tmp_path):
     )
     registry.save()
 
-    reloaded = Registry.load(registry_path)
+    reloaded = Registry(registry_path)
     entry = reloaded.get("sweep-1")
     assert entry["task_id"] == "board6x6_5mines"
     assert entry["algorithm"] == "dqn"

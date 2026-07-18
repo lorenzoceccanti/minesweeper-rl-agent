@@ -1,10 +1,11 @@
-"""Builds one W&B `sweep_config` per (algorithm, task, architecture) triple.
+"""costruisce il dizionario sweep_config che wandb.sweep() si aspetta
 
-Each sweep targets exactly one architecture so its `parameters` dict stays
-flat (see sweeps/config_space.py): the board configuration is a fixed input
-to a task, not a search dimension, so board_height/board_width/n_mines are
-injected here as fixed `value` entries alongside architecture_name, never as
-part of the swept `search_space`.
+uno per ogni combinazione di algoritmo, task (board) e architettura. ogni
+sweep punta a una sola architettura cosi' i parametri restano "piatti"
+(vedi sweeps/config_space.py): la board non e' un parametro da cercare ma
+un valore fisso del task, quindi board_height/board_width/n_mines vengono
+messi qui dentro come "value" bloccato, insieme ad architecture_name, mai
+come parte dello spazio di ricerca
 """
 
 from __future__ import annotations
@@ -14,30 +15,25 @@ from typing import Any
 from sweeps.budget import resolve_episode_budget
 from sweeps.config_space import build_parameter_space
 
-# Number of reported validation checkpoints Hyperband waits for before it is
+# number of reported validation checkpoints Hyperband waits for before it is
 # allowed to prune a trial. Kept independent of the episode budget: what
 # Hyperband counts is validation *reports* (one per on_validation call), not
 # episodes, and how many reports a given episode budget produces depends on
-# validation_frequency -- a per-algorithm training setting the sweep doesn't
-# necessarily sample. A small fixed floor is a safe default at any board size;
-# eta=3 still grows the brackets multiplicatively from there.
+# validation_frequency
 DEFAULT_HYPERBAND_MIN_ITER = 3
 DEFAULT_HYPERBAND_ETA = 3
 
-
-# Suffix shared by every entry in config_space.KNOWN_ARCHITECTURES (layer
-# count/channels/input channels). Sweep names lead with the parts that
-# actually differ between sweeps in a campaign (algorithm, architecture), so
-# this constant suffix is dropped there -- it's still recorded in full as the
-# fixed `architecture_name` parameter on every run.
+# suffix shared by every arch name
 _ARCHITECTURE_NAME_SUFFIX = "_3layer_64ch_11in"
 
 
+# nome leggibile per lo sweep su wandb, tolgo il suffisso comune tanto e' sempre uguale
 def sweep_name(campaign_name: str, task_id: str, algorithm: str, architecture_name: str) -> str:
     short_architecture = architecture_name.removesuffix(_ARCHITECTURE_NAME_SUFFIX)
     return f"{campaign_name}-{algorithm}-{short_architecture}-{task_id}"
 
 
+# main function of the module: assembles the full dict that gets passed straight into wandb.sweep()
 def build_sweep_config(
     campaign: dict[str, Any],
     task: dict[str, Any],
@@ -45,8 +41,10 @@ def build_sweep_config(
     architecture_name: str,
 ) -> dict[str, Any]:
     """Build a wandb.sweep()-ready config for one (algorithm, task, architecture) triple."""
+    # questi sono i parametri che wandb variera' davvero durante la ricerca (learning rate, gamma ecc)
     swept_parameters = build_parameter_space(algorithm, architecture_name, campaign["search_space"])
 
+    # quanti episodi allenare, calcolato in base alla dimensione della board (vedi budget.py)
     episode_budget = resolve_episode_budget(
         task["board_height"],
         task["board_width"],
@@ -54,6 +52,7 @@ def build_sweep_config(
         override=task.get("episode_budget_override"),
     )
 
+    # questi invece sono valori bloccati, uguali per ogni trial dello sweep (non vengono cercati)
     fixed_parameters = {
         "architecture_name": {"value": architecture_name},
         "board_height": {"value": task["board_height"]},
@@ -62,6 +61,7 @@ def build_sweep_config(
         "n_episodes": {"value": episode_budget},
     }
 
+    # sanity check: nessun parametro fisso deve comparire anche tra quelli cercati, altrimenti e' ambiguo
     collisions = swept_parameters.keys() & fixed_parameters.keys()
     if collisions:
         raise ValueError(
@@ -73,10 +73,15 @@ def build_sweep_config(
         "name": sweep_name(campaign["campaign_name"], task["id"], algorithm, architecture_name),
         "method": campaign.get("search_method", "random"),
         "metric": {"name": "search/objective", "goal": "maximize"},
+        # hyperband early termination: il controller dello sweep sul cloud di wandb (non il 
+        # worker locale) confronta i trial tra loro a ogni checkpoint e killa quelli col 
+        # win_rate piu' basso prima che finiscano tutti gli episodi, cosi' il budget temporale
+        # si concentra sui config migliori
         "early_terminate": {
             "type": "hyperband",
             "min_iter": DEFAULT_HYPERBAND_MIN_ITER,
             "eta": DEFAULT_HYPERBAND_ETA,
         },
+        # unione dei due dict, i parametri fissi prima cosi' in caso di errore e' piu' facile da leggere
         "parameters": {**fixed_parameters, **swept_parameters},
     }

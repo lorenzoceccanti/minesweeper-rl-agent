@@ -37,12 +37,12 @@ python -m sweeps.cli promote --campaign sweeps/campaigns/<campaign>.yaml
 python -m sweeps.cli report --campaign sweeps/campaigns/<campaign>.yaml
 ```
 
-For an unattended multi-day run, use `sweeps/run_overnight.sh` instead of calling
+For an unattended multi-day run, use `sweeps/run.sh` instead of calling
 `worker` directly — it round-robins a few trials at a time across all of a campaign's
 sweeps instead of letting one sweep monopolize the machine, and auto-restarts on failure:
 
 ```bash
-./sweeps/run_overnight.sh sweeps/campaigns/<campaign>.yaml <profile>
+./sweeps/run.sh sweeps/campaigns/<campaign>.yaml <profile>
 ```
 
 # Contributors

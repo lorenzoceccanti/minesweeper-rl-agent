@@ -1,12 +1,9 @@
-"""Training function invoked by `wandb agent` for one sweep trial.
+"""funzione che wandb chiama per far partire un singolo trial dello sweep
 
-`wandb.agent(sweep_id, function=...)` calls its target function with no
-arguments per trial, after populating `wandb.config` with this trial's
-sampled hyperparameters plus the fixed architecture_name/board_*/n_episodes
-values sweep_builder attaches to every trial of a sweep. The algorithm
-("dqn"/"ppo") is not itself part of a sweep's parameters (each sweep already
-targets exactly one algorithm), so it is bound ahead of time via
-`functools.partial(run_trial, algorithm)` when registering with the agent.
+wandb.agent(sweep_id, function=...) chiama questa funzione senza argomenti,
+ma prima riempie wandb.config con gli iperparametri campionati per quel
+trial piu' i valori fissi (architecture_name/board_*/n_episodes) che
+sweep_builder attacca a ogni trial.
 """
 
 from __future__ import annotations
@@ -25,46 +22,38 @@ TRAIN_MODULES = {"dqn": train_dqn, "ppo": train_ppo}
 DEFAULT_CONFIG_PATH = resolve_project_path("config.yaml")
 
 
+# carica il config.yaml del progetto (quello con tutti i default di training)
 def load_base_config(path=DEFAULT_CONFIG_PATH) -> dict[str, Any]:
     with open(path, "r") as handle:
         return yaml.safe_load(handle) or {}
 
 
+# overlays the sweep trial's hyperparameters on top of the yaml defaults, highest priority wins
 def build_run_config(
     algorithm: str,
     base_config: dict[str, Any],
     sweep_config: dict[str, Any],
 ) -> dict[str, Any]:
-    """Overlay one sweep trial's parameters onto config.yaml's train defaults.
-
-    Same priority order main.py uses for CLI overrides: config.yaml's
-    `<algorithm>.train` defaults, then `<algorithm>` root fields
-    (architecture_name/hidden_channels/global_features_dim/critic_hidden_size
-    /device), then this trial's `sweep_config` (`wandb.config` as a plain
-    dict) on top -- the highest-priority layer, since every trial always
-    fixes architecture_name/board_*/n_episodes and may also sample training
-    hyperparameters that must win over the base config.yaml defaults.
-    """
-    run_config = dict(base_config[algorithm]["train"])
-    inject_algorithm_root_fields(run_config, base_config, algorithm)
-    run_config.update(sweep_config)
+    
+    run_config = dict(base_config[algorithm]["train"])  # parti dai default dell'algoritmo
+    inject_algorithm_root_fields(run_config, base_config, algorithm)  # aggiungi i campi di architettura
+    run_config.update(sweep_config)  # e infine sovrascrivi con quello che ha campionato wandb
     return run_config
 
 
+# builds the actual callback function for agents/*.py 
 def make_wandb_callback():
-    """Build the concrete on_validation callback, keeping wandb out of agents/*."""
 
     def on_validation(metrics: dict[str, Any]) -> None:
+        # "search/objective" e' la metrica che wandb usa per decidere quanto e' buono il trial
         wandb.log({"search/objective": metrics["win_rate"], **metrics})
 
     return on_validation
 
 
+# funzione vera e propria che wandb.agent chiama per ogni singolo trial dello sweep
 def run_trial(algorithm: str) -> None:
-    # tagged so sweep trials can be filtered out of the main Runs table,
-    # where they'd otherwise be indistinguishable from manual training runs
-    # (project/entity are inherited from the wandb.agent() call that invokes
-    # this function, so they don't need to be passed here too)
+    # tagged so sweep trials can be easily filtered in web UI
     run = wandb.init(tags=["sweep"])
     base_config = load_base_config()
     run_config = build_run_config(algorithm, base_config, dict(run.config))

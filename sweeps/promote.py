@@ -1,31 +1,10 @@
-"""Promotion pipeline: sweep finalists -> multi-seed confirmation retrain -> held-out test.
+"""pipeline di promozione: 
+    finalisti dello sweep 
+        -> ri-allenamento di conferma su piu' seed 
+            -> test su episodi mai visti
 
-Adapts tmp/random_search.py's promote/confirm/test stages (select_finalists,
-make_confirmation_tasks, run_final_tests) to this project's W&B-native
-design: finalists are read from a sweep's finished runs via wandb.Api()
-instead of a local screening jsonl, and confirmation/test retrains run as
-ordinary W&B runs (tagged stage=confirm) instead of a single-machine
-wall-clock scheduling loop.
-
-Two deliberate simplifications versus tmp/random_search.py, both because a
-sweep trial's on_validation callback only ever reports `win_rate`
-(agents/*.py::evaluate_greedy returns a bare float -- no mean_return is
-computed during training-time validation, only during the old script's
-separate post-training `evaluate()` call):
-
-  * Screening records (`fetch_finished_screening_records`) and confirmation
-    records (`run_confirmation_trial`) both set `validation_mean_return` to
-    a fixed 0.0 placeholder. `sweeps.scoring.score`/`select_finalists`/
-    `aggregate_confirmation` sort by (win_rate, mean_return) and compute the
-    win-rate CI only from win_rate, so this only affects tie-breaking
-    between otherwise-equal win rates and the (cosmetic) mean_return column
-    in the report -- never the win-rate ranking or the CI itself.
-  * A confirmation record's `config_id` is carried over unchanged from its
-    source finalist rather than recomputed from the confirm-stage run
-    config: n_episodes/agent_seed differ between screening and confirmation
-    on purpose (confirm retrains for `confirm_episodes` on a fixed seed),
-    and re-hashing those in would make identical hyperparameter/architecture
-    configs collide under different config_ids across stages.
+i finalisti si leggono dai run finiti di uno sweep con wandb.Api() e i retrain 
+di conferma/test sono normali run di wandb (con tag stage=confirm).
 """
 
 from __future__ import annotations
@@ -48,22 +27,21 @@ from train import ppo as train_ppo
 TRAIN_MODULES = {"dqn": train_dqn, "ppo": train_ppo}
 EVALUATE_MODULES = {"dqn": evaluate_dqn, "ppo": evaluate_ppo}
 
-MISSING_MEAN_RETURN = 0.0
-
-# Terminal states worth ranking. "failed" covers both a Hyperband-pruned
-# trial (the common case -- see sweeps/sweep_builder.py's min_iter/eta) and
-# a genuine uncaught exception; "crashed" covers a process that died without
-# ever calling wandb.finish() (e.g. a background-thread SIGILL). Either way,
-# best_win_rate below is what the trial actually achieved before it stopped,
-# which is worth ranking regardless of why it stopped. "running"/"queued"
-# are excluded: not a stable result yet, could still improve.
+# quando hyperband killa un trial (early termination) wandb lo segna come "failed",
+# non come "finished": e' cosi' che si presentano la maggior parte dei trial pruned. 
+# "crashed" invece e' un processo morto senza chiamare wandb.finish(). 
+# in entrambi i casi il trial ha comunque raggiunto un best_win_rate prima di 
+# fermarsi, quindi vale la pena rankarlo lo stesso
 _RANKABLE_RUN_STATES = {"finished", "failed", "crashed"}
 
 
+# percorso del json dove salviamo i risultati della promozione per questa campagna
 def promotion_path_for(campaign_name: str) -> Path:
     return resolve_project_path(f"sweeps/registry/{campaign_name}.promotion.json")
 
 
+# pulls every finished run of a sweep from the w&b api and reshapes it into a record
+# that scoring.py understands
 def fetch_finished_screening_records(
     sweep_id: str,
     algorithm: str,
@@ -88,6 +66,7 @@ def fetch_finished_screening_records(
     sweep = api.sweep(f"{resolved_entity}/{project}/{sweep_id}")
 
     records = []
+    # scorriamo tutti i run dello sweep e teniamo solo quelli in uno stato "rankabile"
     for run in sweep.runs:
         if run.state not in _RANKABLE_RUN_STATES:
             continue
@@ -103,23 +82,12 @@ def fetch_finished_screening_records(
             "hyperparameters": config,
             "run_id": run.id,
             "validation_win_rate": float(win_rate),
-            "validation_mean_return": MISSING_MEAN_RETURN,
+            "validation_mean_return": 0.0  # not logged during training, only at test time
         })
     return records
 
 
-def select_sweep_finalists(
-    sweep_id: str,
-    algorithm: str,
-    count: int,
-    project: str,
-    entity: str | None = None,
-    api: "wandb.Api | None" = None,
-) -> list[dict[str, Any]]:
-    records = fetch_finished_screening_records(sweep_id, algorithm, project, entity, api=api)
-    return select_finalists(records, algorithm, count)
-
-
+# makes sure two different confirmation seeds never train on overlapping env seeds
 def _disjoint_env_seed_start(base_start: int, confirm_episodes: int, seed_index: int) -> int:
     """Give each confirmation seed's own non-overlapping episode/env-seed block.
 
@@ -130,6 +98,7 @@ def _disjoint_env_seed_start(base_start: int, confirm_episodes: int, seed_index:
     return base_start + seed_index * confirm_episodes
 
 
+# costruisce la config di training per un singolo run di conferma, partendo dagli iperparametri del finalista
 def _confirm_run_config(
     algorithm: str,
     base_config: dict[str, Any],
@@ -147,6 +116,7 @@ def _confirm_run_config(
     return run_config
 
 
+# retrains one finalist config on one specific seed and logs it as its own w&b run
 def run_confirmation_trial(
     algorithm: str,
     finalist: dict[str, Any],
@@ -182,9 +152,11 @@ def run_confirmation_trial(
         config={**run_config, "config_id": finalist["config_id"], "confirm_seed": seed},
     )
     try:
+        # qui parte davvero il training, dqn o ppo a seconda dell'algoritmo scelto
         result = TRAIN_MODULES[algorithm].run(run_config, on_validation=make_wandb_callback())
         win_rate = float(wandb.run.summary.get("best_validation_win_rate", 0.0))
     finally:
+        # sempre chiudere il run, anche se il training esplode con un'eccezione
         wandb.finish()
 
     return {
@@ -195,7 +167,7 @@ def run_confirmation_trial(
         "hyperparameters": finalist["hyperparameters"],
         "agent_seed": seed,
         "validation_win_rate": win_rate,
-        "validation_mean_return": MISSING_MEAN_RETURN,
+        "validation_mean_return": 0.0,  # not logged during training, only at test time
         "checkpoint": str(result["best_checkpoint_path"]),
         "board_height": result["board_height"],
         "board_width": result["board_width"],
@@ -203,6 +175,7 @@ def run_confirmation_trial(
     }
 
 
+# loops over every finalist and every confirmation seed, running one trial each time
 def run_confirmation(
     algorithm: str,
     finalists: list[dict[str, Any]],
@@ -215,6 +188,7 @@ def run_confirmation(
     base_config = base_config or load_base_config()
     records = []
     for finalist in finalists:
+        # ogni finalista viene ri-allenato su tutti i seed di conferma, non solo uno
         for seed_index, seed in enumerate(confirm_seeds):
             records.append(
                 run_confirmation_trial(
@@ -229,6 +203,7 @@ def select_winner(
 ) -> dict[str, Any] | None:
     """Best aggregated confirmation config, excluding any that skipped a seed."""
     aggregates = aggregate_confirmation(confirm_records, algorithm)
+    # scarta i config che non hanno finito tutti i seed richiesti, altrimenti il confronto sarebbe ingiusto
     complete = [aggregate for aggregate in aggregates if len(aggregate["records"]) == required_seed_count]
     return complete[0] if complete else None
 
@@ -247,6 +222,7 @@ def run_held_out_test(
     the confirm-stage run that produced the checkpoint.
     """
     base_config = base_config or load_base_config()
+    # tra tutte le repliche del vincitore (una per seed) scegliamo quella col win rate piu' alto da testare
     best_replica = max(winner["records"], key=lambda record: record["validation_win_rate"])
 
     test_config = dict(base_config[algorithm]["test"])
@@ -262,6 +238,7 @@ def run_held_out_test(
     return EVALUATE_MODULES[algorithm].run(test_config)
 
 
+# basically the same idea as Registry in registry.py but for promotion results instead of sweep metadata
 class PromotionStore:
     """One JSON file per campaign: sweep_id -> {finalists, confirm_records, winner, test_summary}."""
 
@@ -284,10 +261,6 @@ class PromotionStore:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_text(json.dumps(self._entries, indent=2, sort_keys=True, default=str))
 
-    @classmethod
-    def load(cls, path: str | Path) -> "PromotionStore":
-        return cls(path)
-
 
 def promote_sweep(
     sweep_id: str,
@@ -302,10 +275,10 @@ def promote_sweep(
     base_config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Run the full finalists -> confirm -> (winner) -> held-out test pipeline for one sweep."""
+    # questa e' la funzione "regista": chiama in ordine tutte le fasi della pipeline di promozione
     base_config = base_config or load_base_config()
-    finalists = select_sweep_finalists(
-        sweep_id, algorithm, promotion["finalists_per_sweep"], project, entity, api=api
-    )
+    screening_records = fetch_finished_screening_records(sweep_id, algorithm, project, entity, api=api)
+    finalists = select_finalists(screening_records, algorithm, promotion["finalists_per_sweep"])
     confirm_records = run_confirmation(
         algorithm,
         finalists,
@@ -318,6 +291,7 @@ def promote_sweep(
     winner = select_winner(confirm_records, algorithm, len(promotion["confirm_seeds"]))
 
     test_summary = None
+    # test finale solo se abbiamo un vincitore vero, altrimenti non c'e' niente da testare
     if winner is not None:
         test_summary = run_held_out_test(
             winner,
@@ -339,10 +313,12 @@ def promote_sweep(
     }
 
 
+# tiny formatting helper, turns 0.734 into "73.40%" or a dash if there's nothing to show
 def _fmt_rate(value: float | None) -> str:
     return "—" if value is None else f"{value:.2%}"
 
 
+# genera il markdown vero e proprio, un blocco per ogni sweep con vincitore e risultato del test
 def format_report(campaign_name: str, promotion_results: dict[str, dict[str, Any]]) -> str:
     lines = [f"# Promotion report: {campaign_name}", ""]
 

@@ -21,10 +21,16 @@ def test_config_id_distinguishes_network_size():
     assert config_id(small) != config_id(large)
 
 
-def test_score_orders_by_win_rate_then_return():
+def test_score_orders_by_win_rate():
     better = {"validation_win_rate": 0.6, "validation_mean_return": 1.0}
     worse = {"validation_win_rate": 0.5, "validation_mean_return": 5.0}
     assert score(better) > score(worse)
+
+
+def test_score_ignores_mean_return_for_ties():
+    a = {"validation_win_rate": 0.6, "validation_mean_return": 1.0}
+    b = {"validation_win_rate": 0.6, "validation_mean_return": 999.0}
+    assert score(a) == score(b)
 
 
 def _screen_record(config_id_value, win_rate, mean_return, algorithm="dqn", status="completed"):

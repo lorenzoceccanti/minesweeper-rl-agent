@@ -219,7 +219,7 @@ def test_promotion_store_round_trip(tmp_path):
     store.set_result("sweep-1", {"algorithm": "dqn", "winner": None})
     store.save()
 
-    reloaded = PromotionStore.load(path)
+    reloaded = PromotionStore(path)
     assert reloaded.get("sweep-1") == {"algorithm": "dqn", "winner": None}
 
 

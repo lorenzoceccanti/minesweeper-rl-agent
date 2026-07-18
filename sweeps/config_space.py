@@ -1,33 +1,30 @@
-"""Per-architecture flat search spaces for W&B sweeps.
+"""qui si costruisce lo spazio di ricerca per ogni combinazione algoritmo+architettura
 
-Each sweep targets exactly one (algorithm, task, architecture) triple, so its
-W&B `parameters` dict must be flat: no parameter that is meaningless for the
-chosen architecture should ever appear (e.g. `global_features_dim`, which
-only affects the global_skip backbone -- see models/factory.py, where
-fully_conv networks never receive it). Splitting sweeps by architecture
-(instead of sampling architecture *inside* one sweep) is what keeps this
-flat: this module only merges the campaign YAML's `common` search space with
-the architecture-specific one and validates the split was done correctly.
+ogni sweep di wandb punta a una sola architettura, quindi i parametri devono
+essere "piatti": non deve mai comparire un parametro che non ha senso per
+quell'architettura (tipo global_features_dim, che serve solo alla rete con
+skip connection). questo modulo si occupa solo di unire i parametri "common"
+dello yaml con quelli specifici dell'architettura e controllare che non ci
+siano errori nella divisione
 """
 
 from __future__ import annotations
 
 from typing import Any
 
+# le due architetture di rete neurale che il progetto sa costruire (vedi models/factory.py)
 KNOWN_ARCHITECTURES = frozenset({
     "fully_conv_3layer_64ch_11in",
     "global_skip_conv_3layer_64ch_11in",
 })
 
-# Parameters that only make sense for a specific architecture. hidden_channels
-# and critic_hidden_size are deliberately absent here: per models/factory.py
-# both apply to every known architecture (critic_hidden_size sizes the critic
-# MLP head regardless of backbone), so they belong under `common`.
+# these keys can only be set for the architecture listed, not shared across all archs
 ARCHITECTURE_RESTRICTED_PARAMS: dict[str, frozenset[str]] = {
     "global_skip_conv_3layer_64ch_11in": frozenset({"global_features_dim"}),
 }
 
 
+# generatore semplice: scorre il dict {algoritmo: [lista architetture]} e tira fuori tutte le coppie
 def iter_algorithm_architecture_pairs(architectures: dict[str, list[str]]):
     """Yield (algorithm, architecture) for every combination declared in a campaign."""
     for algorithm, archs in architectures.items():
@@ -40,6 +37,7 @@ def iter_algorithm_architecture_pairs(architectures: dict[str, list[str]]):
             yield algorithm, architecture_name
 
 
+# main function of this file, merges common + architecture-specific hyperparams into one flat dict
 def build_parameter_space(
     algorithm: str,
     architecture_name: str,
@@ -55,9 +53,11 @@ def build_parameter_space(
     if architecture_name not in KNOWN_ARCHITECTURES:
         raise ValueError(f"Unknown architecture {architecture_name!r}")
 
+    # prendo i parametri comuni a tutte le architetture per questo algoritmo
     algo_space = search_space.get(algorithm, {})
     common = dict(algo_space.get("common", {}))
 
+    # controllo che nessun parametro "riservato" ad altre architetture sia finito per sbaglio in common
     for other_architecture, restricted_keys in ARCHITECTURE_RESTRICTED_PARAMS.items():
         if other_architecture == architecture_name:
             continue
@@ -69,6 +69,7 @@ def build_parameter_space(
                 f"search_space.{algorithm}.{other_architecture}"
             )
 
+    # e aggiungo i parametri specifici solo di questa architettura
     arch_specific = dict(algo_space.get(architecture_name, {}))
     overlap = common.keys() & arch_specific.keys()
     if overlap:
@@ -77,6 +78,7 @@ def build_parameter_space(
             f"'common' and {architecture_name!r}"
         )
 
+    # unisco i due dizionari, questo e' quello che poi diventa il "parameters" di wandb.sweep
     merged = {**common, **arch_specific}
     if not merged:
         raise ValueError(

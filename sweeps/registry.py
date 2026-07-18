@@ -1,11 +1,11 @@
-"""Tracks W&B sweep IDs against the code state each sweep was registered under.
+"""tiene traccia degli sweep id di wandb insieme allo stato del codice con cui sono stati registrati
 
-A worker can start hours or days after `register`, on a different machine.
-If the code has drifted since registration (a different commit, uncommitted
-changes, or an edited agents/models/train file), trials it runs are not
-comparable to trials from before the drift -- silently mixing them would
-corrupt scoring/promotion. The registry is the source of truth `worker`
-checks against before running any sweep.
+un worker puo' partire ore o giorni dopo il 'register', magari su un'altra
+macchina. se nel frattempo il codice e' cambiato (commit diverso, modifiche
+non committate, un file di agents/models/train editato), i trial di quel
+worker non sono piu' confrontabili con quelli di prima -- mischiarli senza
+accorgersene rovinerebbe scoring e promotion. il registry e' la fonte di
+verita' che 'worker' controlla prima di far girare qualsiasi sweep
 """
 
 from __future__ import annotations
@@ -19,6 +19,8 @@ from typing import Any
 
 from common.paths import resolve_project_path
 
+# file "sensibili": se cambiano dopo che uno sweep e' stato registrato, i trial diventano
+# non piu' confrontabili con quelli fatti prima (logica di training/agenti diversa)
 TRACKED_SOURCE_FILES = (
     "agents/dqn_agent.py",
     "agents/ppo_agent.py",
@@ -28,6 +30,7 @@ TRACKED_SOURCE_FILES = (
 )
 
 
+# generic helper to run a git command and get back the cleaned up stdout
 def _run_git(*args: str) -> str:
     result = subprocess.run(
         ["git", *args],
@@ -39,18 +42,22 @@ def _run_git(*args: str) -> str:
     return result.stdout.strip()
 
 
+# hash del commit attuale su cui si trova il repo
 def current_git_commit() -> str:
     return _run_git("rev-parse", "HEAD")
 
 
+# true se ci sono modifiche non committate (working tree sporco)
 def current_git_dirty() -> bool:
     return bool(_run_git("status", "--porcelain"))
 
 
+# hashes a single file's content, catches edits even when there's no new commit
 def _file_sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+# calcola l'hash di ogni file "tracciato" cosi' si puo' confrontare dopo se qualcosa e' cambiato
 def current_source_hashes(tracked_files: tuple[str, ...] = TRACKED_SOURCE_FILES) -> dict[str, str]:
     return {
         relative_path: _file_sha256(resolve_project_path(relative_path))
@@ -58,6 +65,7 @@ def current_source_hashes(tracked_files: tuple[str, ...] = TRACKED_SOURCE_FILES)
     }
 
 
+# full snapshot of the code's state right now (commit + dirty flag + per-file hashes)
 def build_code_state() -> dict[str, Any]:
     return {
         "git_commit": current_git_commit(),
@@ -68,6 +76,7 @@ def build_code_state() -> dict[str, Any]:
 
 def code_state_mismatches(recorded: dict[str, Any], current: dict[str, Any]) -> list[str]:
     """Human-readable list of what drifted; empty if the code states match."""
+    # confronta due "fotografie" (quella al momento della registrazione e quella di adesso)
     mismatches = []
     if recorded.get("git_commit") != current.get("git_commit"):
         mismatches.append(
@@ -90,12 +99,14 @@ def code_state_mismatches(recorded: dict[str, Any], current: dict[str, Any]) -> 
 class Registry:
     """One JSON file per campaign: sweep_id -> {code state, task, algorithm, architecture}."""
 
+    # loads the file if it's already there, otherwise starts with an empty registry
     def __init__(self, path: str | Path):
         self.path = Path(path)
         self._entries: dict[str, dict[str, Any]] = {}
         if self.path.exists():
             self._entries = json.loads(self.path.read_text())
 
+    # aggiunge una nuova entry per uno sweep appena creato, con relativa fotografia del codice
     def register(
         self,
         sweep_id: str,
@@ -121,6 +132,7 @@ class Registry:
     def sweep_ids(self) -> list[str]:
         return list(self._entries)
 
+    # filtra solo gli sweep che riguardano gli algoritmi passati (serve al comando worker)
     def entries_for_algorithms(self, algorithms: list[str]) -> dict[str, dict[str, Any]]:
         return {
             sweep_id: entry
@@ -128,10 +140,7 @@ class Registry:
             if entry["algorithm"] in algorithms
         }
 
+    # scrive tutto su disco in json, formattato leggibile
     def save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_text(json.dumps(self._entries, indent=2, sort_keys=True))
-
-    @classmethod
-    def load(cls, path: str | Path) -> "Registry":
-        return cls(path)

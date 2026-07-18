@@ -1,51 +1,36 @@
 campaign_name: best_search_2
 base_config: config.yaml
 
-# board 9x9/10 mine: task target di questa campagna, non fissato come
-# headline del report a priori -- la decisione 6x6 vs 9x9 per il report
-# arriva dopo aver visto i risultati confermati qui. Nessun
-# episode_budget_override: sweeps/budget.py scala proporzionalmente alle
-# celle libere rispetto al reference 6x6/5 mine (20000 episodi), qui
-# ~45800 episodi di screening.
+# task target di questa campagna: board 9x9 con 10 mine
 tasks:
   - id: board9x9_10mines
     board_height: 9
     board_width: 9
     n_mines: 10
 
-# entrambi gli algoritmi, entrambe le architetture: 4 sweep totali (come
-# overnight_dqn_ppo.yaml, solo retargettato su 9x9/10 mine). PPO incluso
-# perche' la campagna gira 2 giorni senza supervisione su due macchine.
+# entrambi gli algoritmi, entrambe le architetture: 4 sweep totali.
 architectures:
   dqn: [fully_conv_3layer_64ch_11in, global_skip_conv_3layer_64ch_11in]
   ppo: [fully_conv_3layer_64ch_11in, global_skip_conv_3layer_64ch_11in]
 
-# bayes, non random: stessa logica di overnight_dqn_ppo.yaml (evita di
-# ripescare combinazioni gia' viste su centinaia di trial), e conta di piu'
-# qui perche' i trial su 9x9 costano di piu' di 6x6 -> meno trial totali
-# permessi dal budget di tempo -> l'efficienza per trial di bayes conta di piu'.
+# bayes: la ricerca bayesiana campiona in modo piu' intelligente rispetto ad 
+# una random search pura, poiché utilizza i risultati dei trial precedenti per
+# aggiornare la distribuzione di probabilità dei parametri e guidare il 
+# campionamento dei parametri futuri verso regioni più promettenti dello spazio
+# dei parametri. Questo approccio può portare a una convergenza più rapida verso 
+# configurazioni ottimali, riducendo il numero di trial necessari per trovare 
+# buone soluzioni rispetto a una ricerca casuale.
 search_method: bayes
 
 search_space:
   dqn:
     common:
-      # learning_rate: continuo, log-uniform, stesso range validato in
-      # overnight_dqn_ppo.yaml (1e-4 - 1e-3)
+      # learning_rate: continuo, log-uniform
       learning_rate: {distribution: log_uniform_values, min: 0.0001, max: 0.001}
-      # gamma: discreto apposta, sono valori che vogliamo poter discutere
-      # singolarmente nel report (agente miope vs lungimirante), non un
-      # numero arbitrario pescato a caso
+      # gamma: discreto
       discount_factor: {values: [0.8, 0.9, 0.95, 0.99]}
       final_epsilon: {values: [0.01, 0.05, 0.1]}
-      # epsilon_decay_type/epsilon_beta: non ancora esplorati in nessuno
-      # sweep precedente. epsilon_beta e' inerte quando decay_type=linear
-      # (agents/dqn_agent.py), quindi includerlo sempre e' sicuro.
       epsilon_decay_type: {values: [linear, exponential]}
-      # continuo, non griglia a 5 punti: e' una manopola pura senza regimi
-      # interpretabili da discutere nel report, un valore intermedio tra
-      # due punti della griglia potrebbe essere l'ottimo reale. Uniform e
-      # non log-uniform perche' il range e' stretto, non multi-ordine di
-      # grandezza.
       epsilon_beta: {distribution: uniform, min: 0.999, max: 0.9998}
       batch_size: {values: [64, 128]}
       replay_buffer_capacity: {values: [50000, 100000]}
@@ -61,50 +46,42 @@ search_space:
       actor_learning_rate: {distribution: log_uniform_values, min: 0.0001, max: 0.0003}
       critic_learning_rate: {distribution: log_uniform_values, min: 0.0003, max: 0.002}
       discount_factor: {values: [0.95, 0.99]}
-      # continuo: stessa logica di epsilon_beta, manopola stretta senza
-      # regimi da discutere
+      # gae_lambda: continuo, uniform
       gae_lambda: {distribution: uniform, min: 0.90, max: 0.99}
       rollout_steps: {values: [1024, 2048, 4096]}
-      # discreto apposta: deve restare <= rollout_steps piu' piccolo (1024)
-      # per ogni combinazione campionata, come nello sweep originale
+      # discreto: deve restare <= rollout_steps piu' piccolo (1024)
       batch_size: {values: [64, 128, 256]}
       # continuo intero: 3 punti fissi escludevano valori intermedi
-      # plausibili (4, 6, 7...)
       update_epochs: {distribution: int_uniform, min: 3, max: 10}
       # continuo: range standard PPO 0.1-0.3, la griglia a 2 punti era
       # troppo grossolana per una manopola continua
       clip_epsilon: {distribution: uniform, min: 0.1, max: 0.3}
       max_actor_grad_norm: {values: [0.5, 1.0]}
       max_critic_grad_norm: {values: [5.0, 10.0]}
-      # discreto apposta: serve lo 0.0 esatto ("nessun entropy bonus"), che
-      # non puo' convivere con un campionamento log-uniform continuo; e'
-      # anche una manopola da discutere narrativamente (exploration vs
-      # exploitation)
+      # entropy_coefficient: discreto
       entropy_coefficient: {values: [0.0, 0.001, 0.005, 0.01]}
       hidden_channels: {values: [32, 64, 128]}
       critic_hidden_size: {values: [256, 512, 1024]}
     global_skip_conv_3layer_64ch_11in:
       global_features_dim: {values: [16, 32, 64]}
 
+# profilo di esecuzione dei worker: quanti trial concorrenti per algoritmo
+# (dqn, ppo) possono essere eseguiti in parallelo su un singolo worker
 worker_profiles:
   overnight:
-    # come overnight_dqn_ppo.yaml: un processo worker gira un trial alla
-    # volta di suo. Piu' macchine (qui: 75/25 tra le due GPU disponibili)
-    # lanciano ciascuna il proprio worker sullo stesso sweep_id -- e' il
-    # server wandb a distribuire i trial tra i worker concorrenti, non
-    # serve nessuna logica in piu' qui.
     max_concurrent_runs: 1
     algorithms: [dqn, ppo]
 
+# profilo di promozione dei migliori trial: quanti trial per algoritmo (dqn, ppo)
+# vengono promossi alla fase di conferma finale, e quanti episodi di conferma
+# vengono eseguiti per ciascun trial promosso. I trial promossi vengono
+# eseguiti con un set di 3 seed indipendenti per stimare la robustezza della performance.
 promotion:
   finalists_per_sweep: 1
-  # 100k episodi: stesso budget "a parita'" che serviva per confrontare
-  # epsilon_decay_type vecchio/nuovo, ora deciso dalla search invece che a mano
   confirm_episodes: 100000
-  # 3 seed indipendenti: e' l'intervallo di confidenza che manca al report
-  # attuale (headline 6x6 e' a singolo seed)
   confirm_seeds: [43, 44, 45]
 
+# profilo di test finale dei migliori trial confermati: quanti episodi di test vengono eseguiti per ciascun trial confermato, e quale seed iniziale viene usato
 test:
   n_episodes_per_seed: 1000
   test_seed_start: 1000000
