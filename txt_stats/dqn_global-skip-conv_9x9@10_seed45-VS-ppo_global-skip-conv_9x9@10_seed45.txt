@@ -1,0 +1,16 @@
+WILCOXON SIGNED RANK TEST ON RETURNS: 
+Paired episodes: 1000 
+csv/dqn/dqn_global-skip-conv_9x9@10_seed45_results.csv > csv/ppo/ppo_global-skip-conv_9x9@10_seed45_results.csv: 
+ 1.11 +_ 1.21 VS 1.11 +_ 1.18
+ Two sided Wilcoxon-Signed Rank Test for Returns (alpha = 0.05): SIGNIFICANT. (p_two = 1.36e-02)
+ One-sides Wilcoxon-Signed Rank Test for Returns (alpha = 0.05): NOT significant. (p_one =  9.93e-01)
+MCNEMAR TEST RESULTS ON WIN-RATE: 
+A: csv/dqn/dqn_global-skip-conv_9x9@10_seed45_results.csv 
+B: csv/ppo/ppo_global-skip-conv_9x9@10_seed45_results.csv 
+  Concordant pairs (both win):  470
+  Concordant pairs (both lose): 143
+  Discordant pairs (only A wins): b = 203
+  Discordant pairs (only B wins): c = 184
+csv/dqn/dqn_global-skip-conv_9x9@10_seed45_results.csv > csv/ppo/ppo_global-skip-conv_9x9@10_seed45_results.csv for win rate. 
+0.67 +_ 0.4693519908248939 VS 0.65 +_ 0.48 
+NOT significant. p_value: 3.6021e-01 alpha: 0.05 
