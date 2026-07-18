@@ -4,18 +4,25 @@ Examples:
     python main.py train --alg=dqn --h=6 --w=6 --m=5 --n-episodes=500
     python main.py test  --alg=ppo --ckpt=checkpoints/*-best.pt --h=6 --w=6 --m=5
     python main.py game  --h=9 --w=9 --m=10
+    python main.py stats --alpha 0.01
 """
 
 import argparse
 import sys
+from datetime import datetime
 
+import wandb
 import yaml
 
 from common.paths import resolve_project_path
+from common.config_merge import inject_algorithm_root_fields
+from tracking.wandb_logger import make_live_validation_callback, run_group
+from common import utility
 import train.dqn
 import train.ppo
 import evaluation.dqn
 import evaluation.ppo
+import evaluation.statistical_testing as stat_testing
 
 DEFAULT_CONFIG_PATH = resolve_project_path("config.yaml")
 
@@ -61,13 +68,13 @@ def deep_merge(base: dict, override: dict) -> dict:
 
 def build_bootstrap_parser() -> argparse.ArgumentParser:
     # questo è un primo parser "leggero", usato solo per scoprire quale
-    # comando (train/test/game) e quale algoritmo (dqn/ppo) sono stati
+    # comando (train/test/game/stats) e quale algoritmo (dqn/ppo) sono stati
     # richiesti, prima di sapere quali altri flag accettare: i flag validi
     # per --n-episodes, --learning-rate ecc dipendono infatti da comando e
     # algoritmo, quindi non possono essere definiti tutti insieme in un
     # unico parser statico
     parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument("command", choices=["train", "test", "game"])
+    parser.add_argument("command", choices=["train", "test", "game", "stats"])
     parser.add_argument("--alg", choices=["dqn", "ppo"], default=None)
     parser.add_argument("--config", default=None)
     return parser
@@ -119,8 +126,8 @@ def main() -> None:
 
     # subtree è la sezione di config rilevante per il comando corrente,
     # ad esempio config["dqn"]["train"] per "python main.py train --alg=dqn"
-    if bootstrap_args.command == "game":
-        subtree = config["game"]
+    if bootstrap_args.command in ("game", "stats"):
+        subtree = config[bootstrap_args.command]
     else:
         subtree = config[bootstrap_args.alg][bootstrap_args.command]
 
@@ -139,24 +146,24 @@ def main() -> None:
     # ottenuto facendo il merge della config di default con gli override
     run_config = {**subtree, **overrides}
 
+    if bootstrap_args.command == "stats":
+        output_wilcoxon = stat_testing.pairwise_wilcoxon_returns(
+            run_config["csv_a"], run_config["csv_b"], alpha=run_config["alpha"])
+        output_mcnemar = stat_testing.pairwise_mcnemar_winrate(
+            run_config["csv_a"], run_config["csv_b"], alpha=run_config["alpha"]
+        )
+        print(output_wilcoxon)
+        print(output_mcnemar)
+        utility.write_txt(
+            output_wilcoxon + "\n" + output_mcnemar,
+            run_config["save_path"],
+            run_config["csv_a"],
+            run_config["csv_b"],
+        )
+        return
+
     if bootstrap_args.command != "game":
-
-        alg_root = config[bootstrap_args.alg]
-
-        # architecture_name è definito una sola volta per algoritmo
-        # (config[alg]["architecture_name"]), non separatamente per
-        # train e test, quindi va aggiunto qui alla config finale
-        run_config["architecture_name"] = alg_root["architecture_name"]
-
-        # recupero dallo yaml i parametri hidden_channels (F), global_features_dim (G)
-        # e critic_hidden_size (numero di colonne della matrice dei pesi del MLP critic head)
-        for key in ["hidden_channels", "global_features_dim", "critic_hidden_size"]:
-            # controllo se sono presenti in cima nello yaml, nella sezione dedicata all'algoritmo
-            if key in alg_root:
-                run_config[key] = alg_root[key]
-        # device è globale (non specifico di alg/train/test), quindi va
-        # letto da main.device e aggiunto qui alla config finale
-        run_config["device"] = config.get("main", {}).get("device")
+        inject_algorithm_root_fields(run_config, config, bootstrap_args.alg)
 
     if bootstrap_args.command == "game":
         from environment import manual_play
@@ -165,7 +172,36 @@ def main() -> None:
         return
 
     if bootstrap_args.command == "train":
-        result = TRAIN_MODULES[bootstrap_args.alg].run(run_config)
+        # timestamp deterministico per il nome della run, con la stessa struttura
+        # "{algoritmo}-{timestamp}-train" che log_run() userebbe comunque a fine
+        # training: così la run resta facile da riconoscere invece di ricevere un
+        # nome casuale da wandb
+        timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+
+        # apriamo la run wandb prima di iniziare il training, non dopo: così la
+        # callback on_validation può mandare il win rate mano a mano che gli
+        # episodi vengono giocati, invece di aspettare la fine per un unico upload
+        wandb.init(
+            project=run_config["wandb_project"],
+            entity=run_config["wandb_entity"],
+            job_type=bootstrap_args.alg,
+            group=run_group(
+                bootstrap_args.alg,
+                run_config["architecture_name"],
+                run_config["board_height"],
+                run_config["board_width"],
+                run_config["n_mines"],
+            ),
+            name=f"{bootstrap_args.alg}-{timestamp}-train",
+            config=run_config,
+        )
+
+        on_validation = make_live_validation_callback(bootstrap_args.alg)
+        result = TRAIN_MODULES[bootstrap_args.alg].run(run_config, on_validation=on_validation)
+
+        # log_run() dentro train/dqn.py e train/ppo.py trova la run già aperta
+        # qui sopra e la riusa, ma non la chiude da sola: tocca a noi farlo
+        wandb.finish()
 
         # se non specificato da riga di comando, il comportamento di
         # default (auto-test dopo il training) viene letto dalla config

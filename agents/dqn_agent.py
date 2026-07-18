@@ -10,6 +10,7 @@ import numpy as np
 from tqdm import tqdm
 from datetime import datetime
 from pathlib import Path
+from typing import Callable
 
 class DQNAgent:
     def __init__(
@@ -19,7 +20,7 @@ class DQNAgent:
         seed,
         learning_rate: float,
         initial_epsilon: float,
-        epsilon_decay: float,
+        epsilon_decay: float, # per eps decay lineare
         final_epsilon: float,
         discount_factor: float = 0.95,
         replay_buffer_capacity: int = 50_000,
@@ -35,7 +36,11 @@ class DQNAgent:
         architecture_name: str = "fully_conv_3layer_64ch_11in",
         checkpoint_dir: str | Path = "checkpoints/dqn",
         hidden_channels: int = 64, # F
-        global_features_dim: int = 16 # G
+        global_features_dim: int = 16, # G
+        epsilon_decay_type: str = "linear",
+        epsilon_beta: float = 1.0, # usato con eps decay esponenziale,
+        epsilon_step = 0,
+        on_validation: Callable[[dict], None] | None = None,
     ):
         self.seed = seed
         self.logger = logger
@@ -72,7 +77,7 @@ class DQNAgent:
             lr=learning_rate
         )
 
-        self.loss_fn = nn.MSELoss()
+        self.loss_fn = nn.HuberLoss()
 
         # == Replay Buffer ==
 
@@ -87,6 +92,12 @@ class DQNAgent:
         self.epsilon = initial_epsilon
         self.epsilon_decay = epsilon_decay
         self.final_epsilon = final_epsilon
+
+        # == eps decaying
+        self.epsilon_decay_type = epsilon_decay_type
+        self.epsilon_beta = epsilon_beta
+        self.epsilon_step = epsilon_step # è un contatore di episodi, il t del beta alla t
+        # questa cosa viene fatta in previsione di un eventuale ripristino da checkpoint
 
         self.hidden_channels = hidden_channels # F
         self.global_features_dim = global_features_dim # G
@@ -105,7 +116,8 @@ class DQNAgent:
         self.validation_episodes = validation_episodes
         self.validation_seed_start = validation_seed_start
         self.validation_frequency = validation_frequency
-        
+        self.on_validation = on_validation
+
         self.checkpoint_dir = checkpoint_dir
         self.architecture_name = architecture_name
         self.validation_history = []
@@ -159,6 +171,7 @@ class DQNAgent:
 
             # Training state
             "epsilon": self.epsilon,
+            "epsilon_step": self.epsilon_step,
             "global_step": self.global_step,
             "seed": self.seed,
 
@@ -191,8 +204,10 @@ class DQNAgent:
                 "learning_rate": self.learning_rate,
                 "discount_factor": self.discount_factor,
                 "initial_epsilon": self.initial_epsilon,
-                "epsilon_decay": self.epsilon_decay,
+                "epsilon_decay": self.epsilon_decay, # ha senso solo sui linear
                 "final_epsilon": self.final_epsilon,
+                "epsilon_decay_type": self.epsilon_decay_type,
+                "epsilon_beta": self.epsilon_beta, # ha senso solo sugli exp
                 "replay_buffer_capacity": self.replay_buffer_capacity,
                 "batch_size": self.batch_size,
                 "target_update_frequency": self.target_update_frequency,
@@ -312,9 +327,16 @@ class DQNAgent:
         return self.get_greedy_action(obs, mine_density)
 
     def decay_epsilon(self):
+        self.epsilon_step += 1
+        if self.epsilon_decay_type == "exponential":
+            # eps0*b^t
+            new_eps = self.initial_epsilon * (self.epsilon_beta ** self.epsilon_step)
+        else: # linear eps decaying
+            new_eps = self.epsilon - self.epsilon_decay
+        
         self.epsilon = max(
             self.final_epsilon,
-            self.epsilon - self.epsilon_decay
+            new_eps
         )
 
     def update_target_network(self):
@@ -570,6 +592,14 @@ class DQNAgent:
                     "global_step": self.global_step,
                     "win_rate": validation_win_rate,
                 })
+
+                if self.on_validation is not None:
+                    self.on_validation({
+                        "episode": completed_episodes,
+                        "global_step": self.global_step,
+                        "win_rate": validation_win_rate,
+                        "best_win_rate": max(self.best_validation_win_rate, validation_win_rate),
+                    })
 
                 # utilizzando il > anziché >=, in caso di parità
                 # sul win rate si mantiene il primo checkpoint che ha raggiunto

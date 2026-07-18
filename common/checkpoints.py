@@ -36,7 +36,6 @@ def load_dqn_agent_from_checkpoint(checkpoint_path, env, device, fallback_seed) 
         seed=checkpoint_seed,
         learning_rate=hyperparameters.get("learning_rate", 1e-3),
         initial_epsilon=0.0,
-        epsilon_decay=0.0,
         final_epsilon=0.0,
         discount_factor=hyperparameters.get("discount_factor", 0.8),
         replay_buffer_capacity=1,
@@ -47,7 +46,10 @@ def load_dqn_agent_from_checkpoint(checkpoint_path, env, device, fallback_seed) 
         logger=None,
         architecture_name=architecture_name,
         hidden_channels=hidden_channels,
-        global_features_dim=global_features_dim
+        global_features_dim=global_features_dim,
+        epsilon_decay_type=hyperparameters.get("epsilon_decay_type", "linear"),
+        epsilon_decay=hyperparameters.get("epsilon_decay", 0.0),
+        epsilon_beta=hyperparameters.get("epsilon_beta", 1.0)
     )
 
     agent.online_network.load_state_dict(checkpoint["online_network_state_dict"])

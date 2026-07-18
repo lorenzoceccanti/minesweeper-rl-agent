@@ -1,11 +1,10 @@
 from agents import dqn_agent as dqn
 from common.seeding import select_device, set_global_seed
 from environment import minesweeper_env as mine
-from plot import training_plots
 from tracking import wandb_logger
 
 
-def run(config: dict) -> dict:
+def run(config: dict, on_validation=None) -> dict:
     set_global_seed(config["agent_seed"])
 
     device = select_device(config.get("device"))
@@ -13,9 +12,20 @@ def run(config: dict) -> dict:
 
     architecture_name = config["architecture_name"]
 
-    epsilon_decay = (
-        config["start_epsilon"] - config["final_epsilon"]
-    ) / (config["n_episodes"] / 2)
+    # if the config.yaml doesn't contain the parameter
+    # epsilon_decay_type, we use the linear eps decaying
+    # this is done to support older implementations
+    decay_type = config.get("epsilon_decay_type", "linear")
+
+    if decay_type == "linear":
+        epsilon_decay = (
+            config["start_epsilon"] - config["final_epsilon"]
+        ) / (config["n_episodes"] / 2)
+        epsilon_beta = 1.0 # beta for linear eps decaying is inoperative, we put
+        # a random ignored value
+    else: # exponential epsilon decaying
+        epsilon_beta = config["epsilon_beta"]
+        epsilon_decay = 0.0 # to be ignored during exponential epsilon decaying
 
     env = mine.MinesweeperEnv(
         board_height=config["board_height"],
@@ -38,6 +48,8 @@ def run(config: dict) -> dict:
         learning_rate=config["learning_rate"],
         initial_epsilon=config["start_epsilon"],
         epsilon_decay=epsilon_decay,
+        epsilon_decay_type=decay_type,
+        epsilon_beta=epsilon_beta,
         final_epsilon=config["final_epsilon"],
         discount_factor=config["discount_factor"],
         replay_buffer_capacity=config["replay_buffer_capacity"],
@@ -53,7 +65,8 @@ def run(config: dict) -> dict:
         architecture_name=architecture_name,
         checkpoint_dir=config["checkpoint_dir"],
         hidden_channels=config["hidden_channels"],
-        global_features_dim=config["global_features_dim"]
+        global_features_dim=config["global_features_dim"],
+        on_validation=on_validation,
     )
 
     try:
@@ -73,19 +86,10 @@ def run(config: dict) -> dict:
             f"{agent.checkpoint_path}"
         )
 
-        plot_path = training_plots.plot_training_from_checkpoint(
-            checkpoint_path=final_checkpoint_path,
-            board_height=config["board_height"],
-            board_width=config["board_width"],
-            num_mines=config["n_mines"],
-            output_dir="plots",
-        )
-
         wandb_logger.log_run(
             algorithm="dqn",
             checkpoint_path=final_checkpoint_path,
             best_checkpoint_path=agent.checkpoint_path,
-            plot_paths=[plot_path],
             project=config["wandb_project"],
             entity=config["wandb_entity"],
             architecture_name=config["architecture_name"],

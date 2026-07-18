@@ -1,11 +1,10 @@
 from agents import ppo_agent as ppo
 from common.seeding import select_device, set_global_seed
 from environment import minesweeper_env as mine
-from plot import training_plots
 from tracking import wandb_logger
 
 
-def run(config: dict) -> dict:
+def run(config: dict, on_validation=None) -> dict:
     set_global_seed(config["agent_seed"])
 
     device = select_device(config.get("device"))
@@ -51,7 +50,8 @@ def run(config: dict) -> dict:
         checkpoint_dir=config["checkpoint_dir"],
         hidden_channels=config["hidden_channels"],
         global_features_dim=config["global_features_dim"],
-        critic_hidden_size=config["critic_hidden_size"]
+        critic_hidden_size=config["critic_hidden_size"],
+        on_validation=on_validation,
     )
 
     try:
@@ -64,25 +64,16 @@ def run(config: dict) -> dict:
         print(f"Checkpoint saved to: {checkpoint_path}")
         print(f"Best validation checkpoint: {agent.checkpoint_path}")
 
-    finally:
-        plot_path = training_plots.plot_training_from_checkpoint(
-            checkpoint_path=checkpoint_path,
-            board_height=config["board_height"],
-            board_width=config["board_width"],
-            num_mines=config["n_mines"],
-            output_dir="plots",
-        )
-
         wandb_logger.log_run(
             algorithm="ppo",
             checkpoint_path=checkpoint_path,
             best_checkpoint_path=agent.checkpoint_path,
-            plot_paths=[plot_path],
             project=config["wandb_project"],
             entity=config["wandb_entity"],
             architecture_name=config["architecture_name"],
         )
 
+    finally:
         env.close()
         validation_env.close()
 

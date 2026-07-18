@@ -1,0 +1,87 @@
+campaign_name: best_search_2
+base_config: config.yaml
+
+# task target di questa campagna: board 9x9 con 10 mine
+tasks:
+  - id: board9x9_10mines
+    board_height: 9
+    board_width: 9
+    n_mines: 10
+
+# entrambi gli algoritmi, entrambe le architetture: 4 sweep totali.
+architectures:
+  dqn: [fully_conv_3layer_64ch_11in, global_skip_conv_3layer_64ch_11in]
+  ppo: [fully_conv_3layer_64ch_11in, global_skip_conv_3layer_64ch_11in]
+
+# bayes: la ricerca bayesiana campiona in modo piu' intelligente rispetto ad 
+# una random search pura, poiché utilizza i risultati dei trial precedenti per
+# aggiornare la distribuzione di probabilità dei parametri e guidare il 
+# campionamento dei parametri futuri verso regioni più promettenti dello spazio
+# dei parametri. Questo approccio può portare a una convergenza più rapida verso 
+# configurazioni ottimali, riducendo il numero di trial necessari per trovare 
+# buone soluzioni rispetto a una ricerca casuale.
+search_method: bayes
+
+search_space:
+  dqn:
+    common:
+      # learning_rate: continuo, log-uniform
+      learning_rate: {distribution: log_uniform_values, min: 0.0001, max: 0.001}
+      # gamma: discreto
+      discount_factor: {values: [0.8, 0.9, 0.95, 0.99]}
+      final_epsilon: {values: [0.01, 0.05, 0.1]}
+      epsilon_decay_type: {values: [linear, exponential]}
+      epsilon_beta: {distribution: uniform, min: 0.999, max: 0.9998}
+      batch_size: {values: [64, 128]}
+      replay_buffer_capacity: {values: [50000, 100000]}
+      target_update_frequency: {values: [500, 1000, 2000]}
+      learning_starts: {values: [1000, 5000]}
+      train_frequency: {values: [1, 4]}
+      hidden_channels: {values: [32, 64, 128]}
+    global_skip_conv_3layer_64ch_11in:
+      global_features_dim: {values: [16, 32, 64]}
+
+  ppo:
+    common:
+      actor_learning_rate: {distribution: log_uniform_values, min: 0.0001, max: 0.0003}
+      critic_learning_rate: {distribution: log_uniform_values, min: 0.0003, max: 0.002}
+      discount_factor: {values: [0.95, 0.99]}
+      # gae_lambda: continuo, uniform
+      gae_lambda: {distribution: uniform, min: 0.90, max: 0.99}
+      rollout_steps: {values: [1024, 2048, 4096]}
+      # discreto: deve restare <= rollout_steps piu' piccolo (1024)
+      batch_size: {values: [64, 128, 256]}
+      # continuo intero: 3 punti fissi escludevano valori intermedi
+      update_epochs: {distribution: int_uniform, min: 3, max: 10}
+      # continuo: range standard PPO 0.1-0.3, la griglia a 2 punti era
+      # troppo grossolana per una manopola continua
+      clip_epsilon: {distribution: uniform, min: 0.1, max: 0.3}
+      max_actor_grad_norm: {values: [0.5, 1.0]}
+      max_critic_grad_norm: {values: [5.0, 10.0]}
+      # entropy_coefficient: discreto
+      entropy_coefficient: {values: [0.0, 0.001, 0.005, 0.01]}
+      hidden_channels: {values: [32, 64, 128]}
+      critic_hidden_size: {values: [256, 512, 1024]}
+    global_skip_conv_3layer_64ch_11in:
+      global_features_dim: {values: [16, 32, 64]}
+
+# profilo di esecuzione dei worker: quanti trial concorrenti per algoritmo
+# (dqn, ppo) possono essere eseguiti in parallelo su un singolo worker
+worker_profiles:
+  overnight:
+    max_concurrent_runs: 1
+    algorithms: [dqn, ppo]
+
+# profilo di promozione dei migliori trial: quanti trial per algoritmo (dqn, ppo)
+# vengono promossi alla fase di conferma finale, e quanti episodi di conferma
+# vengono eseguiti per ciascun trial promosso. I trial promossi vengono
+# eseguiti con un set di 3 seed indipendenti per stimare la robustezza della performance.
+promotion:
+  finalists_per_sweep: 1
+  confirm_episodes: 100000
+  confirm_seeds: [43, 44, 45]
+
+# profilo di test finale dei migliori trial confermati: quanti episodi di test vengono eseguiti per ciascun trial confermato, e quale seed iniziale viene usato
+test:
+  n_episodes_per_seed: 1000
+  test_seed_start: 1000000

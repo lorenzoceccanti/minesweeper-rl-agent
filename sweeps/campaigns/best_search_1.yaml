@@ -1,0 +1,71 @@
+campaign_name: best_search_1
+base_config: config.yaml
+
+tasks:
+  - id: board6x6_5mines
+    board_height: 6
+    board_width: 6
+    n_mines: 5
+
+# entrambe le architetture per entrambi gli algoritmi: 4 sweep totali
+# (dqn/fully_conv, dqn/global_skip, ppo/fully_conv, ppo/global_skip)
+architectures:
+  dqn: [fully_conv_3layer_64ch_11in, global_skip_conv_3layer_64ch_11in]
+  ppo: [fully_conv_3layer_64ch_11in, global_skip_conv_3layer_64ch_11in]
+
+# bayes invece di random: costruisce un modello di quanto rende ogni
+# configurazione già provata e pesca dove sembra più promettente, invece di
+# pescare alla cieca
+search_method: bayes
+
+search_space:
+  dqn:
+    common:
+      # learning_rate: continuo su scala log
+      learning_rate: {distribution: log_uniform_values, min: 0.0001, max: 0.001}
+      discount_factor: {values: [0.8, 0.9, 0.95, 0.99]}
+      final_epsilon: {values: [0.01, 0.05, 0.1]}
+      batch_size: {values: [64, 128]}
+      replay_buffer_capacity: {values: [50000, 100000]}
+      target_update_frequency: {values: [500, 1000, 2000]}
+      learning_starts: {values: [1000, 5000]}
+      train_frequency: {values: [1, 4]}
+      hidden_channels: {values: [32, 64, 128]}
+    global_skip_conv_3layer_64ch_11in:
+      global_features_dim: {values: [16, 32, 64]}
+
+  ppo:
+    common:
+      actor_learning_rate: {distribution: log_uniform_values, min: 0.0001, max: 0.0003}
+      critic_learning_rate: {distribution: log_uniform_values, min: 0.0003, max: 0.002}
+      discount_factor: {values: [0.95, 0.99]}
+      gae_lambda: {values: [0.90, 0.95, 0.98]}
+      # batch_size resta sempre <= al più piccolo rollout_steps (1024), così ogni
+      # combinazione campionata è valida
+      rollout_steps: {values: [1024, 2048, 4096]}
+      batch_size: {values: [64, 128, 256]}
+      update_epochs: {values: [3, 5, 10]}
+      clip_epsilon: {values: [0.1, 0.2]}
+      max_actor_grad_norm: {values: [0.5, 1.0]}
+      max_critic_grad_norm: {values: [5.0, 10.0]}
+      entropy_coefficient: {values: [0.0, 0.001, 0.005, 0.01]}
+      hidden_channels: {values: [32, 64, 128]}
+      # MLP head del critic, PPO-only ma indipendente dal backbone -> common
+      critic_hidden_size: {values: [256, 512, 1024]}
+    global_skip_conv_3layer_64ch_11in:
+      global_features_dim: {values: [16, 32, 64]}
+
+worker_profiles:
+  overnight:
+    max_concurrent_runs: 1
+    algorithms: [dqn, ppo]
+
+promotion:
+  finalists_per_sweep: 2
+  confirm_episodes: 50000
+  # 3 seed indipendenti
+  confirm_seeds: [43, 44, 45]
+
+test:
+  n_episodes_per_seed: 1000
+  test_seed_start: 1000000
