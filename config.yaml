@@ -1,7 +1,7 @@
 main:
   auto_test: true
   # forza device pytorch ("cpu", "cuda", "mps")
-  device: cuda
+  device: cpu
 
 dqn:
   # alternative: fully_conv_3layer_64ch_11in, global_skip_conv_3layer_64ch_11in 
@@ -36,7 +36,7 @@ dqn:
     wandb_entity: null
     wandb_project: minesweeper-rl
   test:
-    checkpoint_path: checkpoints/dqn/2026-07-16-16-36-14-best.pt
+    checkpoint_path: checkpoints/dqn/wandb-best/dqn_global-skip-conv_9x9@10_seed45.pt
     board_height: 9
     board_width: 9
     n_mines: 10
@@ -46,10 +46,10 @@ dqn:
     agent_seed: 42
     moving_average_window: 50
     test_output_dir: plots/test
-    log_wandb: true
     save_csv: true
     dir_csv: csv/dqn 
     name_csv: null
+    log_wandb: false
     wandb_project: minesweeper-rl
     wandb_entity: null
 
@@ -88,7 +88,7 @@ ppo:
     wandb_entity: null
     wandb_project: minesweeper-rl
   test:
-    checkpoint_path: checkpoints/ppo/2026-07-17-20-44-43-best.pt
+    checkpoint_path: checkpoints/ppo/wandb-best/ppo_global-skip-conv_9x9@10_seed45.pt
     board_height: 9
     board_width: 9
     n_mines: 10
@@ -98,11 +98,10 @@ ppo:
     agent_seed: 42
     moving_average_window: 50
     test_output_dir: plots/test
-    log_wandb: true
     save_csv: true
     dir_csv: csv/ppo 
-    name_csv: ppo_fully-conv_9x9@10_seed43
     name_csv: null
+    log_wandb: false
     wandb_project: minesweeper-rl
     wandb_entity: null
 
