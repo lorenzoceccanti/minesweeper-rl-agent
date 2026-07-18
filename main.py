@@ -4,6 +4,7 @@ Examples:
     python main.py train --alg=dqn --h=6 --w=6 --m=5 --n-episodes=500
     python main.py test  --alg=ppo --ckpt=checkpoints/*-best.pt --h=6 --w=6 --m=5
     python main.py game  --h=9 --w=9 --m=10
+    python main.py stats --alpha 0.01
 """
 
 import argparse
@@ -20,6 +21,7 @@ import train.dqn
 import train.ppo
 import evaluation.dqn
 import evaluation.ppo
+import evaluation.statistical_testing as stat_testing
 
 DEFAULT_CONFIG_PATH = resolve_project_path("config.yaml")
 
@@ -65,13 +67,13 @@ def deep_merge(base: dict, override: dict) -> dict:
 
 def build_bootstrap_parser() -> argparse.ArgumentParser:
     # questo è un primo parser "leggero", usato solo per scoprire quale
-    # comando (train/test/game) e quale algoritmo (dqn/ppo) sono stati
+    # comando (train/test/game/stats) e quale algoritmo (dqn/ppo) sono stati
     # richiesti, prima di sapere quali altri flag accettare: i flag validi
     # per --n-episodes, --learning-rate ecc dipendono infatti da comando e
     # algoritmo, quindi non possono essere definiti tutti insieme in un
     # unico parser statico
     parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument("command", choices=["train", "test", "game"])
+    parser.add_argument("command", choices=["train", "test", "game", "stats"])
     parser.add_argument("--alg", choices=["dqn", "ppo"], default=None)
     parser.add_argument("--config", default=None)
     return parser
@@ -123,8 +125,8 @@ def main() -> None:
 
     # subtree è la sezione di config rilevante per il comando corrente,
     # ad esempio config["dqn"]["train"] per "python main.py train --alg=dqn"
-    if bootstrap_args.command == "game":
-        subtree = config["game"]
+    if bootstrap_args.command in ("game", "stats"):
+        subtree = config[bootstrap_args.command]
     else:
         subtree = config[bootstrap_args.alg][bootstrap_args.command]
 
@@ -142,6 +144,16 @@ def main() -> None:
     # il dizionario finale di config da usare per training/test/game è
     # ottenuto facendo il merge della config di default con gli override
     run_config = {**subtree, **overrides}
+
+    if bootstrap_args.command == "stats":
+        output_wilcoxon = stat_testing.pairwise_wilcoxon_returns(
+            run_config["csv_a"], run_config["csv_b"], alpha=run_config["alpha"])
+        output_mcnemar = stat_testing.pairwise_mcnemar_winrate(
+            run_config["csv_a"], run_config["csv_b"], alpha=run_config["alpha"]
+        )
+        print(output_wilcoxon)
+        print(output_mcnemar)
+        return
 
     if bootstrap_args.command != "game":
         inject_algorithm_root_fields(run_config, config, bootstrap_args.alg)

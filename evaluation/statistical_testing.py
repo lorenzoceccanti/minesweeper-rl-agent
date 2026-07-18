@@ -27,10 +27,8 @@ def pairwise_wilcoxon_returns(csv_path_a: str, csv_path_b: str, alpha: float = 0
             f"Test will run on common seeds only."
         )
 
-
-    print(f"\nModel A: {csv_path_a}")
-    print(f"Model B: {csv_path_b}")
-    print(f"Paired episodes: {n_common}")
+    results = "WILCOXON SIGNED RANK TEST ON RETURNS: \n"
+    results += f"Paired episodes: {n_common} \n"
     
     # Wilcoxon signed-rank test on returns
 
@@ -53,12 +51,12 @@ def pairwise_wilcoxon_returns(csv_path_a: str, csv_path_b: str, alpha: float = 0
 
     # one sided test: the model with the higher mean is tested as the greater one
     if mean_b >= mean_a:
-        better_label = f"{csv_path_b} > {csv_path_a} \n: {mean_b:.2f} +_ {std_b:.2f} VS"
+        better_label = f"{csv_path_b} > {csv_path_a}: \n {mean_b:.2f} +_ {std_b:.2f} VS"
         better_label += f"{mean_a:.2f} +_ {std_a:.2f}"
 
         stat_one, p_one = wilcoxon(values_returnB, values_returnA, alternative="greater")
     else:
-        better_label = f"{csv_path_a} > {csv_path_b} \n: {mean_a:.2f} +_ {std_a:.2f} VS"
+        better_label = f"{csv_path_a} > {csv_path_b}: \n {mean_a:.2f} +_ {std_a:.2f} VS"
         better_label += f"{mean_b:.2f} +_ {std_b:.2f}"
 
         stat_one, p_one = wilcoxon(values_returnA, values_returnB, alternative="greater")
@@ -66,17 +64,17 @@ def pairwise_wilcoxon_returns(csv_path_a: str, csv_path_b: str, alpha: float = 0
     significant_two = p_two < alpha
     significant_one = p_one < alpha
 
-    results = better_label + f"\n Two sided Wilcoxon-Signed Rank Test for Returns (alpha = {alpha}):"
+    results += better_label + f"\n Two sided Wilcoxon-Signed Rank Test for Returns (alpha = {alpha}):"
     if significant_two:
-        results += f" SIGNIFICANT. (p_two = {p_two:.4e})"
+        results += f" SIGNIFICANT. (p_two = {p_two:.2e})"
     else:
-        results += f" NOT significant. (p_two = {p_two:.4e})"
+        results += f" NOT significant. (p_two = {p_two:.2e})"
     
     results += f"\n One-sides Wilcoxon-Signed Rank Test for Returns (alpha = {alpha}):"
     if significant_one:
-        results += f" SIGNIFICANT. (p_one = {p_one: .4e})"
+        results += f" SIGNIFICANT. (p_one = {p_one: .2e})"
     else:
-        results += f" NOT significant. (p_one = {p_one: .4e})"
+        results += f" NOT significant. (p_one = {p_one: .2e})"
 
     return results
 

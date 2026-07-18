@@ -47,6 +47,9 @@ dqn:
     moving_average_window: 50
     test_output_dir: plots/test
     log_wandb: true
+    save_csv: true
+    dir_csv: csv/dqn 
+    name_csv: null
     wandb_project: minesweeper-rl
     wandb_entity: null
 
@@ -96,8 +99,16 @@ ppo:
     moving_average_window: 50
     test_output_dir: plots/test
     log_wandb: true
+    save_csv: true
+    dir_csv: csv/ppo 
+    name_csv: ppo_fully-conv_9x9@10_seed43
     wandb_project: minesweeper-rl
     wandb_entity: null
+
+stats:
+  csv_a: csv/dqn/dqn_fully-conv_9x9@10_seed43_results.csv
+  csv_b: csv/ppo/ppo_fully-conv_9x9@10_seed43_results.csv
+  alpha: 0.05
 
 game:
   width: 9
