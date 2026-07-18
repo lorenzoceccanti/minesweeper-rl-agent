@@ -23,7 +23,7 @@ from sweeps.campaign_schema import validate_campaign
 from sweeps.config_space import iter_algorithm_architecture_pairs
 from sweeps.promote import PromotionStore, format_report, promote_sweep, promotion_path_for
 from sweeps.registry import Registry, build_code_state, code_state_mismatches
-from sweeps.sweep_builder import build_sweep_config, sweep_name
+from sweeps.sweep_builder import build_sweep_config
 from sweeps.train_entrypoint import run_trial
 
 DEFAULT_GRID_TRIAL_WARNING_THRESHOLD = 100
