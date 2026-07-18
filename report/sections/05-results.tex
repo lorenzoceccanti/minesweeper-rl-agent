@@ -17,11 +17,70 @@
   \end{itemize}
 \end{frame}
 \begin{frame}{Statistical tests: Fixing DRL algorithm, \texttt{fully\_conv} VS \texttt{global\_skip\_conv}}
-\twocol{
-    colonna sx
-}{
-    colonna dx
-}
+Due to the nature of the environment, the metric we aimed to maximize is the win rate.
+Statistical test used: McNemar test; it's the equivalent of the
+Wilcoxon-signed rank test for binary events. The test focuses only on disagreeing episodes.
+
+\small{$c = $ \texttt{num\_episodes} won by $B$ \hspace{1.5em} $b$ \texttt{num\_episodes} won by $A$.
+
+\texttt{p\_value} = Probability of observing $c$ wins of B over $b+c$ total victories
+
+$ = P(X=c)$, $X \sim \text{Binom}(n=b+c, p=0.5)$. $\mathcal{H}_0: P(A:wins, B:lose) = P(A:lose, B:wins)$}
+
+  \textbf{DQN}
+  \vspace{-0.2em}
+  {\scriptsize
+  \centering
+  \setlength{\tabcolsep}{3pt}
+  \renewcommand{\arraystretch}{0.85}
+
+  \begin{tabular}{c|cccc}
+  \texttt{agent\_seed}
+  &
+  Win rate (\texttt{fully\_conv})
+  &
+  Win rate (\texttt{global\_skip})
+  &
+  $p$-value
+  &
+  Significant ($\alpha=0.05$)
+  \\
+  \hline
+  43 & 69\% & 63\% & $3.32 \times 10^{-3}$ & yes \\
+  44 & 67\% & 67\% & $0.88$                & no  \\
+  45 & 68\% & 67\% & $0.60$                & no
+  \end{tabular}
+
+\par}
+\vspace{0.15em}
+
+\textbf{PPO}
+\vspace{-0.2em}
+{\scriptsize
+\centering
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{0.85}
+
+\begin{tabular}{c|cccc}
+\texttt{agent\_seed}
+&
+Win rate (\texttt{fully\_conv})
+&
+Win rate (\texttt{global\_skip})
+&
+$p$-value
+&
+Significant ($\alpha=0.05$)
+\\
+\hline
+43 & 62\% & 72\% & $7.48 \times 10^{-8}$ & yes \\
+44 & 65\% & 67\% & $0.28$                & no  \\
+45 & 56\% & 65\% & $1.68 \times 10^{-6}$ & yes
+\end{tabular}
+
+\par}
+
+
 \end{frame}
 \begin{frame}{Statistical tests: Fixing architecture, DQN vs PPO}
 Tabelle, colonna sx con fully conv colonna destra con global skip
