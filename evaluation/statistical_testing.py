@@ -83,17 +83,16 @@ def pairwise_mcnemar_winrate(csv_path_a: str, csv_path_b: str, alpha: float = 0.
     different win rate than the other."""
 
     # in un confronto pair-wise su N partite, guardando solo se la partità è vinta
-    # o perssa, la differenza tra esito della partita B ed esito della partita A
-    # può assumere solo tre valoriù
+    # o persa, la differenza tra esito della partita B ed esito della partita A
+    # può assumere solo tre valori
     # d = esito_B - esito_A
-    # d = 0 -> concordi, entrambi hanno vinto
+    # d = 0 -> concordi, entrambi hanno vinto o perso
     # d = +1 -> ha vinto B, contiamo il numero totale in cui ha vinto B con la variabile c
     # d = -1 -> ha vinto A, contiamo il numero totale in cui ha vinto A con la variabile b
     
-    # il test di pairwise calcola la probabilità (p-value) di osservare c vittorie di B
-    # su b + c vittorie totali. se questa probabilità è pari a 0.5, allora non si può
-    # rigettare la null hypotesis e quindi i due modelli sono equivalenti.
-    # questo test è detto two-sided binomial test.
+    # il test calcola la probabilità (p-value) di osservare c vittorie di B
+    # su b + c vittorie totali. Null-Hypotesis: P(A vince,B perde)=P(A perde,B vince)
+    # se è possibile rigettarla, allora si conclude che B abbia staticamente un miglior win-rate.
 
     df_a = pd.read_csv(csv_path_a).set_index("seed")
     df_b = pd.read_csv(csv_path_b).set_index("seed")
