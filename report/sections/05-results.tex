@@ -1,8 +1,30 @@
-\begin{frame}{DQN: parameter tuning and evaluation}
-DQN con i migliori hyperparametri e test statistici
+\begin{frame}{Experimental Setup}
+  \begin{itemize}
+    \item Initial experiments were conducted with board $6 \times 6$, $5$ mines 
+    (density $\approx 13.9\%$) \alert{identical} for DQN and PPO. The metric
+    we aim to maximize is the \texttt{win\_rate}, defined as number of episodes
+    in which the agent won over the total number of test episodes. In this first phase,
+    we were able to achieve a max win rate of $\approx 80.1\%$ for DQN and $\approx 80.2\%$ for
+    PPO.
+    
+    Further experiments were conducted with boards $9 \times 9$ and $10$ mines.
+    \item disjoint RNG seed ranges for train / validation / held-out test
+    \item final evaluation: $1000$ held-out test episodes per agent
+    \item to conduct in a rigorous and ordered manner an experimental performance analysis,
+    we used the \href{https://wandb.ai/site/}{Weight and Biases} platform (academic plan) and its Python Library.
+    The source code interacting with W\&B to store the complete run logs was produced with
+    the help of Claude Opus 4.6 and Gemini 3.5 Flash.
+  \end{itemize}
 \end{frame}
-\begin{frame}{PPO: parameter tuning and evaluation}
-PPO con i migliori hyperparametri e test statistici
+\begin{frame}{Statistical tests: Fixing DRL algorithm, \texttt{fully\_conv} VS \texttt{global\_skip\_conv}}
+\twocol{
+    colonna sx
+}{
+    colonna dx
+}
+\end{frame}
+\begin{frame}{Statistical tests: Fixing architecture, DQN vs PPO}
+Tabelle, colonna sx con fully conv colonna destra con global skip
 \end{frame}
 \begin{frame}{Future works}
 Se vogliamo aggiungere qualcosa su curriculum learning
