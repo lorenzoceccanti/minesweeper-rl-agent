@@ -51,12 +51,12 @@ def pairwise_wilcoxon_returns(csv_path_a: str, csv_path_b: str, alpha: float = 0
 
     # one sided test: the model with the higher mean is tested as the greater one
     if mean_b >= mean_a:
-        better_label = f"{csv_path_b} > {csv_path_a}: \n {mean_b:.2f} +_ {std_b:.2f} VS"
+        better_label = f"{csv_path_b} > {csv_path_a}: \n {mean_b:.2f} +_ {std_b:.2f} VS "
         better_label += f"{mean_a:.2f} +_ {std_a:.2f}"
 
         stat_one, p_one = wilcoxon(values_returnB, values_returnA, alternative="greater")
     else:
-        better_label = f"{csv_path_a} > {csv_path_b}: \n {mean_a:.2f} +_ {std_a:.2f} VS"
+        better_label = f"{csv_path_a} > {csv_path_b}: \n {mean_a:.2f} +_ {std_a:.2f} VS "
         better_label += f"{mean_b:.2f} +_ {std_b:.2f}"
 
         stat_one, p_one = wilcoxon(values_returnA, values_returnB, alternative="greater")
@@ -120,8 +120,8 @@ def pairwise_mcnemar_winrate(csv_path_a: str, csv_path_b: str, alpha: float = 0.
     win_rate_a = won_a.mean()
     win_rate_b = won_b.mean()
 
-    std_dev_a = won_a.std()
-    std_dev_b = won_b.std()
+    std_dev_a = won_a.std(ddof=1) if n_common > 1 else 0.0
+    std_dev_b = won_b.std(ddof=1) if n_common > 1 else 0.0
 
     # concordant pairs (both win or both lose), not used in the test
     concordant = int(((won_a == 1) & (won_b == 1)).sum())   # both win
@@ -132,7 +132,9 @@ def pairwise_mcnemar_winrate(csv_path_a: str, csv_path_b: str, alpha: float = 0.
     c = int(((won_a == 0) & (won_b == 1)).sum())  # only B wins
     n_discordant = b + c
 
-    results = "MCNEMAR TEST RESULTS: \n"
+    results = "MCNEMAR TEST RESULTS ON WIN-RATE: \n"
+    results += f"A: {csv_path_a} \n"
+    results += f"B: {csv_path_b} \n"
     results += f"  Concordant pairs (both win):  {concordant}\n"
     results += f"  Concordant pairs (both lose): {concordant_loss}\n"
     results += f"  Discordant pairs (only A wins): b = {b}\n"

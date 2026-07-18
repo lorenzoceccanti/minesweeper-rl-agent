@@ -108,6 +108,7 @@ ppo:
 stats:
   csv_a: csv/dqn/dqn_fully-conv_9x9@10_seed43_results.csv
   csv_b: csv/ppo/ppo_fully-conv_9x9@10_seed43_results.csv
+  save_path: txt_stats/
   alpha: 0.05
 
 game:

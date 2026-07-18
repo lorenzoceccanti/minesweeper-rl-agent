@@ -17,6 +17,7 @@ import yaml
 from common.paths import resolve_project_path
 from common.config_merge import inject_algorithm_root_fields
 from tracking.wandb_logger import make_live_validation_callback, run_group
+from common import utility
 import train.dqn
 import train.ppo
 import evaluation.dqn
@@ -153,6 +154,12 @@ def main() -> None:
         )
         print(output_wilcoxon)
         print(output_mcnemar)
+        utility.write_txt(
+            output_wilcoxon + "\n" + output_mcnemar,
+            run_config["save_path"],
+            run_config["csv_a"],
+            run_config["csv_b"],
+        )
         return
 
     if bootstrap_args.command != "game":
