@@ -102,6 +102,7 @@ ppo:
     save_csv: true
     dir_csv: csv/ppo 
     name_csv: ppo_fully-conv_9x9@10_seed43
+    name_csv: null
     wandb_project: minesweeper-rl
     wandb_entity: null
 
