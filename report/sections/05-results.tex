@@ -79,17 +79,93 @@ Significant ($\alpha=0.05$)
 \end{tabular}
 
 \par}
-
-
 \end{frame}
 \begin{frame}{Statistical tests: Fixing architecture, DQN vs PPO}
-Tabelle, colonna sx con fully conv colonna destra con global skip
+
+\textbf{\texttt{fully-conv}}
+  \vspace{-0.2em}
+  {\scriptsize
+  \centering
+  \setlength{\tabcolsep}{3pt}
+  \renewcommand{\arraystretch}{0.85}
+
+  \begin{tabular}{c|cccc}
+  \texttt{agent\_seed}
+  &
+  Win rate (DQN)
+  &
+  Win rate (PPO)
+  &
+  $p$-value
+  &
+  Significant ($\alpha=0.05$)
+  \\
+  \hline
+  43 & 69\% & 62\% & $8.23 \times 10^{-4}$ & yes \\
+  44 & 67\% & 65\% & $0.21$ & no  \\
+  45 & 68\% & 56\% & $8.26 \times 10^{-10}$ & yes
+  \end{tabular}
+
+\par}
+\vspace{0.15em}
+
+\textbf{\texttt{global-skip}}
+\vspace{-0.2em}
+{\scriptsize
+\centering
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{0.85}
+
+\begin{tabular}{c|cccc}
+\texttt{agent\_seed}
+&
+Win rate (DQN)
+&
+Win rate (PPO)
+&
+$p$-value
+&
+Significant ($\alpha=0.05$)
+\\
+\hline
+43 & 63\% & 72\% & $1.52 \times 10^{-6}$ & yes \\
+44 & 67\% & 67\% & $1$                & no  \\
+45 & 67\% & 65\% & $0.36$ & no
+\end{tabular}
+
+\par}
+
+\textit{Observations}:
+\begin{itemize}
+  \item There's a strong statistical evidence about the sinergy
+  between PPO and the \texttt{global\_skip} architecture.
+  \item DQN algorithm performs \textit{slightly well} by using \texttt{fully\_conv}
+  architecture, even though there's not a strong statistical evidence.
+\end{itemize}
+
+
 \end{frame}
 \begin{frame}{Future works}
-Se vogliamo aggiungere qualcosa su curriculum learning
-e self attention nel ramo globale.
+During this project we reasoned a lot how to generalize
+to wider boards. Basing on what we've studied until now, we put our maximum
+effort to train and use at inference time the networks independently on the board size.
+
+Future work might include:
+\begin{itemize}
+  \item \textit{curriculum learning}:
+models learn gradually, mimicking how humans learn
+(starting from the basics and moving on to complex topics). The idea
+would be graudally adapt the learning starting from little to bigger
+and more \textit{mine dense} boards.
+  \item \textit{self-attention} in global section of the \texttt{global\_skip\_connection}
+  architecture. A self-attention layer would allow to each cell to measure 
+  the impact of all the other cells of the boards, not only to the ones of its neighboroud.
+  It might preserve spatial features better than a 4x4 global average pooling.
+\end{itemize}
+
+
 \end{frame}
-\begin{frame}{Slide extra}
-Extra slide, più che altro se non abbiamo spazio
-per i grafici e/o parametri, ma con questa abbiamo già sforato di 1.
+\begin{frame}{TikZ drawings: acknowledgments}
+The \LaTeX code in charge of producing TikZ drawings for neural architecture blocks
+or other drawings has been produced with the help of GPT 5.6-Sol and Gemini Flash 3.5.
 \end{frame}
