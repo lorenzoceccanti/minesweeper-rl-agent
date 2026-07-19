@@ -1,6 +1,14 @@
 # minesweeper-rl-agent
 The aim of this project consist in training an agent to play Minesweeper game, in a customized MDP environment and evaluate the performances of various DRL algorithms.
 
+## Demo
+
+Demo running 9x9 board with 10 mines.
+
+<p align="center">
+![demo](./report/assets/demo.gif)
+</p>
+
 ## Usage
 
 ```bash
