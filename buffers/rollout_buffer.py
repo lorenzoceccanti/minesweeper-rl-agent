@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 import random
 import numpy as np
+
 @dataclass
 class RolloutTransition:
     obs: np.ndarray
@@ -10,20 +11,16 @@ class RolloutTransition:
     truncated: bool
     next_obs: np.ndarray
     mine_density: float
-    # We require to store the old
-    # logits. Otherwise we don't have it
-    # when the actor weights are updating
-    # and we would not be able to compute the
-    # probability ratio
+    # We require to store the old logits. Otherwise we don't have it
+    # when the actor weights are updating and we would not be able 
+    # to compute the probability ratio
     old_log_prob: float
-    # We have to store also the advantage
-    # in the rollout transition, otherwise
-    # we would loose the association between
-    # a transaction and the advantage.
-    # The advantage is computed after collecting
-    # the complete rollout. At the beginning
-    # the advantage has None as initial value,
-    # because is known only when T transactions are stored
+    # We have to store also the advantage in the rollout transition, 
+    # otherwise we would loose the association between a transaction 
+    # and the advantage. The advantage is computed after collecting
+    # the complete rollout. At the beginning the advantage has None 
+    # as initial value, because is known only when T transactions 
+    # are stored
     advantage: float | None = None
     # Also the TD value targets (the ones which are treated
     # as constants during the backpropagation) have to be saved
@@ -41,7 +38,7 @@ class RolloutBuffer:
         # al contrario del replay buffer, è una semplice lista.
         # non c'è necessità di mantenere dati vecchi relativi
         # ad esperienze storiche. ci vengono parcheggiate temporanamente
-        # transizioni della stessa policy pi(old)
+        # transizioni della stessa policy
         self.buffer = []
     
     # metodo privato di utilità della classe RolloutBuffer
@@ -176,12 +173,15 @@ class RolloutBuffer:
         return minibatches
     
     def clear(self) -> None:
+        # svuota il rollout buffer, rimuovendo tutte le transizioni accumulate
         self.buffer.clear()
     
     def set_advantages(
         self,
         advantages: np.ndarray,
     ) -> None:
+        # le advantage vengono calcolate dopo che il rollout buffer è stato riempito, quindi
+        # le transizioni vengono aggiornate con le advantage calcolate
         advantages = np.asarray(
             advantages,
             dtype=np.float32,
@@ -209,6 +209,8 @@ class RolloutBuffer:
         self,
         value_targets: np.ndarray,
     ) -> None:
+        # i value targets vengono calcolati dopo che il rollout buffer è stato riempito, quindi
+        # le transizioni vengono aggiornate con i value targets calcolati
         value_targets = np.asarray(
             value_targets,
             dtype=np.float32,

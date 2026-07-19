@@ -4,6 +4,8 @@ Controls:
     left click  -> reveal cell
     r           -> reset (new episode, same board config)
     esc / close -> quit
+    
+NB: This script has been created with the help of Claude Sonnet 5.
 """
 
 import pygame
@@ -28,6 +30,7 @@ def play(config: dict) -> None:
     mines = config["mines"]
     seed = config["seed"]
 
+    # initialize the MinesweeperEnv with render_mode="human"
     env = MinesweeperEnv(
         board_width=width,
         board_height=height,

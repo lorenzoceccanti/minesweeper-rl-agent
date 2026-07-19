@@ -724,7 +724,7 @@ class PPOAgent:
             self.update()
 
             rollout_index += 1
-            # controllo periodico per la greedy evaluation del modello
+            # validazione periodica della rete, con valutazione greedy
             if (
                 self.validation_env is not None
                 and self.validation_episodes > 0

@@ -23,6 +23,7 @@ import train.ppo
 import evaluation.dqn
 import evaluation.ppo
 import evaluation.statistical_testing as stat_testing
+from environment import manual_play
 
 DEFAULT_CONFIG_PATH = resolve_project_path("config.yaml")
 
@@ -82,6 +83,7 @@ def build_bootstrap_parser() -> argparse.ArgumentParser:
 
 def key_to_flag(key: str) -> str:
     # trasforma una chiave di config tipo board_height nel flag --board-height
+    # questo ci permette di generare automaticamente i flag da riga di comando
     return "--" + key.replace("_", "-")
 
 
@@ -142,7 +144,7 @@ def main() -> None:
         if key in subtree and value is not None:
             overrides[key] = value
 
-    # il dizionario finale di config da usare per training/test/game è
+    # il dizionario finale di config da usare per l'esecuzione è
     # ottenuto facendo il merge della config di default con gli override
     run_config = {**subtree, **overrides}
 
@@ -166,21 +168,15 @@ def main() -> None:
         inject_algorithm_root_fields(run_config, config, bootstrap_args.alg)
 
     if bootstrap_args.command == "game":
-        from environment import manual_play
-
         manual_play.play(run_config)
         return
 
     if bootstrap_args.command == "train":
-        # timestamp deterministico per il nome della run, con la stessa struttura
-        # "{algoritmo}-{timestamp}-train" che log_run() userebbe comunque a fine
-        # training: così la run resta facile da riconoscere invece di ricevere un
-        # nome casuale da wandb
+        # timestamp per il nome della run
         timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
 
-        # apriamo la run wandb prima di iniziare il training, non dopo: così la
-        # callback on_validation può mandare il win rate mano a mano che gli
-        # episodi vengono giocati, invece di aspettare la fine per un unico upload
+        # apriamo la run wandb prima di iniziare il training per il
+        # logging live se richiesto
         wandb.init(
             project=run_config["wandb_project"],
             entity=run_config["wandb_entity"],
@@ -196,23 +192,21 @@ def main() -> None:
             config=run_config,
         )
 
+        # l'effettiva callback per il logging live
         on_validation = make_live_validation_callback(bootstrap_args.alg)
         result = TRAIN_MODULES[bootstrap_args.alg].run(run_config, on_validation=on_validation)
 
-        # log_run() dentro train/dqn.py e train/ppo.py trova la run già aperta
-        # qui sopra e la riusa, ma non la chiude da sola: tocca a noi farlo
+        # chiudo la run wandb
         wandb.finish()
 
-        # se non specificato da riga di comando, il comportamento di
-        # default (auto-test dopo il training) viene letto dalla config
+        # auto-test dopo il training se richiesto
         auto_test = args.auto_test
         if auto_test is None:
             auto_test = config.get("main", {}).get("auto_test", True)
 
         if auto_test:
-            # il test viene lanciato sullo stesso identico board (altezza,
-            # larghezza, numero di mine) appena usato per il training, e
-            # sul checkpoint migliore appena prodotto
+            # il test viene lanciato sulla stessa combinazione di board
+            # usato per il training, sul checkpoint migliore appena prodotto
             test_subtree = dict(config[bootstrap_args.alg]["test"])
             test_subtree["checkpoint_path"] = str(result["best_checkpoint_path"])
             test_subtree["board_height"] = result["board_height"]

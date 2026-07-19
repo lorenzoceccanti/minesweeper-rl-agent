@@ -64,8 +64,9 @@ class Game:
         A mine is identified into the board with -1
         """
         
-        # We have to randomly generate a number of mines
-        # equal to num_mines between 0 and (board_width x board_height) - 
+        # we have to randomly generate a number of mine positions
+        # equal to num_mines, in the interval between 0 and 
+        # (board_width x board_height) - 1
         number_of_cells = self.board_width * self.board_height
         # range generates cell ids between 0 and no_cells - 1
         # according to a rng strategy
@@ -174,7 +175,10 @@ class Game:
             return 0
         
     def uncover_cell(self, i, j) -> int:
-        """Reveal a safe cell and, if it is empty, its connected empty region."""
+        """
+        Reveal a safe cell and, if it is empty, its connected empty region (Flood Fill). 
+        The method returns the number of newly revealed cells.
+        """
         if not self.check_boundaries(i, j):
             raise IndexError("Cell coordinates are outside the board")
 
@@ -245,6 +249,7 @@ class Game:
         return newly_opened_cells
     
 
+    # Debug methods to print the board in cli
     def print_board(self):
         """ Utility function to print the board status."""
         print(f"--- Board {self.board_width}x{self.board_height} ({self.num_mines} mines) ---")

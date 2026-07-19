@@ -52,7 +52,7 @@ class ReplayBuffer:
         )
 
     def sample(self, batch_size: int):
-         
+        # campionamento casuale di batch_size transizioni dal replay buffer
         if batch_size > len(self.buffer):
             raise ValueError(
                 f"Cannot sample {batch_size} transitions from a buffer "

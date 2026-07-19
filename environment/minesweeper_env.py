@@ -67,7 +67,7 @@ class MinesweeperEnv(gym.Env):
         # The observation for this game consists in the state of the board
         # A cell in the board could be in the following states
         # -2: unrevealed cell
-        # -1: IS SKIPPED.
+        # -1: IS SKIPPED -> agent must not see the mines.
         # 0..8: a reveladed safe cell, with the number of mines around
 
         self.observation_space = gym.spaces.Box(
@@ -91,8 +91,7 @@ class MinesweeperEnv(gym.Env):
         self.R_lose = -1 # find a mine
 
         # normalized penalties
-        # choosing an already revealed cell, normalized (questo non può mai avvenire grazie all'action masking
-        # ma lo scegliamo di mantenere per salvaguardia)
+        # choosing an already revealed cell, normalized (questo non può mai avvenire grazie all'action masking ma lo manteniamo per salvaguardia)
         self.R_already_open = -0.5/self.n_safe_cells 
         # random guessing: the cell uncovered was safe, but all neighb. cells are undisclosed yet (normalized)
         # essendo una penalty andrà usata come tale, quindi non ci si mette il segno meno
@@ -100,7 +99,6 @@ class MinesweeperEnv(gym.Env):
 
         # We have a dictionary containing the stats about
         # the game played
-
         self.stats = {
             "n_win": 0,
             "n_lose": 0,
@@ -109,6 +107,7 @@ class MinesweeperEnv(gym.Env):
             "num_guess": 0,
             "num_progress": 0
         }
+        
         # GUI stuff
         self.cell_size = GUI_CELL_SIZE
         self.padding = GUI_PADDING
@@ -126,7 +125,6 @@ class MinesweeperEnv(gym.Env):
         self.game = Game(board_width=self.board_width, board_height=self.board_height, num_mines=self.n_mines)
     
         # Pygame resources are created only when human rendering is used.
-        
         self.window = None
         # What are these clock and font objects?
         # The clock object is crucial to limit the speed with which the action
@@ -285,7 +283,7 @@ class MinesweeperEnv(gym.Env):
         terminated = self.done
         # Truncated will become True automatically, if a gym.wrapper.TimeLimit
         # is used when creating the environment: for example, when you want
-        # to early terminate the episode after a certain number of iterations
+        # to early terminate the episode after a certain number of time steps
         truncated = False
 
         if self.render_mode == "human":

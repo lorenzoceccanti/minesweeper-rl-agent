@@ -1,6 +1,5 @@
 import copy
 import gymnasium as gym
-import models.fully_conv_qnet as fully_conv_qnet
 import models.factory as model_factory
 import models.encodings as encodings
 import buffers.replay_buffer as replay_buffer
@@ -62,8 +61,7 @@ class DQNAgent:
         self.online_network = model_factory.get_q_network(architecture_name, hidden_channels=hidden_channels, global_features_dim=global_features_dim).to(self.device)
         self.target_network = model_factory.get_q_network(architecture_name, hidden_channels=hidden_channels, global_features_dim=global_features_dim).to(self.device)
 
-        # At the initialization we have that
-        # Q(s,a,theta_minus) = Q(s,a,theta)
+        # At the initialization we have that Q(s,a,theta_minus) = Q(s,a,theta)
         # La riga sotto sostanzialmente copia i parametri della rete
         # online nella rete offline
         self.target_network.load_state_dict(self.online_network.state_dict())
@@ -80,7 +78,6 @@ class DQNAgent:
         self.loss_fn = nn.HuberLoss()
 
         # == Replay Buffer ==
-
         self.replay_buffer = replay_buffer.ReplayBuffer(replay_buffer_capacity)
         self.replay_buffer_capacity = replay_buffer_capacity
         self.batch_size = batch_size
@@ -579,6 +576,7 @@ class DQNAgent:
 
             completed_episodes = episode + 1
 
+            # validazione periodica della rete online, con valutazione greedy
             if (
                 self.validation_env is not None
                 and self.validation_episodes > 0
