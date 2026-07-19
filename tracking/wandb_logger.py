@@ -446,6 +446,7 @@ def log_test_run(
     tags: list[str] | None = None,
     architecture_name: str | None = None,
     plot_paths: dict[str, str | Path] | None = None,
+    force_standalone: bool = False,
 ) -> None:
     """Logs a held-out test evaluation (see ``tmp/dqn_test.py`` /
     ``tmp/ppo_test.py``) against the *same* W&B run that produced the
@@ -464,10 +465,13 @@ def log_test_run(
     historical runs) have no ``wandb_run_id`` to resume, so this falls
     back to a standalone run linked only via the W&B Artifacts lineage
     graph (matching "best-checkpoint" artifact content hash).
+
+    ``force_standalone=True`` Used for evaluations that must stay
+    fully independent of the training run.
     """
     checkpoint_path = Path(checkpoint_path)
     checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
-    wandb_run_id = checkpoint.get("wandb_run_id")
+    wandb_run_id = None if force_standalone else checkpoint.get("wandb_run_id")
 
     test_row = _test_row(summary)
     table = _episode_table(summary["episodes"])
