@@ -42,11 +42,10 @@
       \item \textit{integer uniform}: \\
             \texttt{update\_epochs} (PPO) $\in [3, 10]$
       \item \textit{discrete grid}: \texttt{discount\_factor}
-            $\in \{0.8, 0.9, 0.95, 0.99\}$
+            $\in \{0.8, 0.9, 0.95, 0.99\}$,
+            \texttt{replay\_buffer\_size} (DQN) $\in \{50000, 100000\}$,
       \item \textit{categorical}: \texttt{epsilon\_decay\_type} (DQN)
             $\in \{\text{linear}, \text{exponential}\}$
-      \item architecture-specific: \texttt{global\_features\_dim}
-            only for \texttt{global\_skip\_conv}
     \end{itemize}
   }
 \end{frame}
@@ -81,9 +80,9 @@
       Significant ($\alpha=0.05$)
       \\
       \hline
-      43 & 69\% & 63\% & $3.32 \times 10^{-3}$ & yes \\
-      44 & 67\% & 67\% & $0.88$                & no  \\
-      45 & 68\% & 67\% & $0.60$                & no
+      43 & \color{goodgreen}\textbf{69\%} & 63\% & $3.32 \times 10^{-3}$ & yes \\
+      44 & 67\%                           & 67\% & $0.88$                & no  \\
+      45 & 68\%                           & 67\% & $0.60$                & no
     \end{tabular}
 
     \par}
@@ -108,9 +107,9 @@
       Significant ($\alpha=0.05$)
       \\
       \hline
-      43 & 62\% & 72\% & $7.48 \times 10^{-8}$ & yes \\
-      44 & 65\% & 67\% & $0.28$                & no  \\
-      45 & 56\% & 65\% & $1.68 \times 10^{-6}$ & yes
+      43 & 62\% & \color{goodgreen}\textbf{72\%} & $7.48 \times 10^{-8}$ & yes \\
+      44 & 65\% & 67\%                           & $0.28$                & no  \\
+      45 & 56\% & \color{goodgreen}\textbf{65\%} & $1.68 \times 10^{-6}$ & yes
     \end{tabular}
 
     \par}
@@ -136,9 +135,9 @@
       Significant ($\alpha=0.05$)
       \\
       \hline
-      43 & 69\% & 62\% & $8.23 \times 10^{-4}$  & yes \\
-      44 & 67\% & 65\% & $0.21$                 & no  \\
-      45 & 68\% & 56\% & $8.26 \times 10^{-10}$ & yes
+      43 & \color{goodgreen}\textbf{69\%} & 62\% & $8.23 \times 10^{-4}$  & yes \\
+      44 & 67\%                           & 65\% & $0.21$                 & no  \\
+      45 & \color{goodgreen}\textbf{68\%} & 56\% & $8.26 \times 10^{-10}$ & yes
     \end{tabular}
 
     \par}
@@ -163,21 +162,25 @@
       Significant ($\alpha=0.05$)
       \\
       \hline
-      43 & 63\% & 72\% & $1.52 \times 10^{-6}$ & yes \\
-      44 & 67\% & 67\% & $1$                   & no  \\
-      45 & 67\% & 65\% & $0.36$                & no
+      43 & 63\% & \color{goodgreen}\textbf{72\%} & $1.52 \times 10^{-6}$ & yes \\
+      44 & 67\% & 67\%                           & $1$                   & no  \\
+      45 & 67\% & 65\%                           & $0.36$                & no
     \end{tabular}
 
     \par}
 
-  \textit{Observations}:
-  \begin{itemize}
-    \item There's a strong statistical evidence about the sinergy
-          between PPO and the \texttt{global\_skip} architecture.
-    \item DQN algorithm performs \textit{slightly better} by using \texttt{fully\_conv}
-          architecture, even though there's not a strong statistical evidence.
-  \end{itemize}
-
+  \footnotesize{
+    \textit{Observations}:
+    \begin{itemize}
+      \item There's a strong statistical evidence about the sinergy
+            between PPO and the \texttt{global\_skip} architecture.
+      \item DQN algorithm performs \textit{slightly better} by using \texttt{fully\_conv}
+            architecture, even though there's not a strong statistical evidence.
+    \end{itemize}
+  }
+  \scriptsize{
+    \textbf{Note:} each test run has been performed on the same held-out test episodes: that's the reason why paired statistical tests have been used.
+  }
 
 \end{frame}
 \begin{frame}{Future works}
