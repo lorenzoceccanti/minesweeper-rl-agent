@@ -6,7 +6,7 @@ The aim of this project consist in training an agent to play Minesweeper game, i
 Demo running 9x9 board with 10 mines.
 
 <p align="center">
-![demo](./report/assets/demo.gif)
+    <img src="./report/assets/demo.gif" alt="demo" />
 </p>
 
 ## Usage
