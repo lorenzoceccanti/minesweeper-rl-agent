@@ -36,7 +36,7 @@ dqn:
     wandb_entity: null
     wandb_project: minesweeper-rl
   test:
-    checkpoint_path: checkpoints/dqn/wandb-best/dqn_global-skip-conv_9x9@10_seed45.pt
+    checkpoint_path: checkpoints/dqn/best/dqn_global-skip-conv_9x9@10_seed45.pt
     board_height: 9
     board_width: 9
     n_mines: 10
@@ -77,7 +77,7 @@ ppo:
     max_actor_grad_norm: 1.0
     max_critic_grad_norm: 10.0
     n_episodes: 100000
-    n_mines: 25
+    n_mines: 10
     render_mode: null
     rollout_steps: 4096
     train_env_seed_start: 50000
@@ -88,10 +88,10 @@ ppo:
     wandb_entity: null
     wandb_project: minesweeper-rl
   test:
-    checkpoint_path: checkpoints/ppo/wandb-best/ppo_global-skip-conv_9x9@10_seed43.pt
-    board_height: 6
-    board_width: 6
-    n_mines: 5
+    checkpoint_path: checkpoints/ppo/best/ppo_global-skip-conv_9x9@10_seed43.pt
+    board_height: 12
+    board_width: 12
+    n_mines: 17
     test_seed_start: 1000000
     test_seed_count: 1000
     render_mode: null
