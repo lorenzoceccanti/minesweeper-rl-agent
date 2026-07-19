@@ -45,20 +45,6 @@
 \begin{frame}{MDP modelling: the action space}
   Every Python class extending the \texttt{gym.Env} base class must have the attributes \texttt{action\_space}
   and \texttt{observation\_space} used to redefine $A$ and $S$.
-\vspace{0.35cm} 
-
-  \begin{center}
-    \begin{tikzpicture}[node distance=1.6cm]
-      \node[state] (s) {$s_t$};
-      \node[action, right=of s] (a) {$a_t$};
-      \node[state, right=of a] (s2) {$s_{t+1}$};
-
-      \draw[flowarrow] (s) -- (a);
-      \draw[flowarrow] (a) -- (s2);
-    \end{tikzpicture}
-    \hspace{0.3cm}
-    {\small Uncover cell $\Rightarrow$ new board state, reward $r_t$.}
-  \end{center}
 
   \vspace{-0.15cm}
   \begin{itemize}
@@ -72,8 +58,7 @@
 \end{frame}
 
 \begin{frame}{MDP modelling: the state space}
-\begin{itemize}
-  \item \textbf{State space} - \texttt{gym.spaces.Box(low=-2, high=8, shape=HxW)}: The state space of the custom MDP 
+  \textbf{State space} - \texttt{gym.spaces.Box(low=-2, high=8, shape=HxW)}: The state space of the custom MDP 
   corresponds to what the agent actually \textit{sees} when playing.
   A cell in the \textit{player board} could be in the following states:
   \begin{itemize}
@@ -83,7 +68,6 @@
     about losing a game by the \textit{terminated} boolean variable of the \textit{Gym Env}.
     \item $0...8$: a revealed safe cell. The number represents the mines around the cell.
   \end{itemize}
-\end{itemize}
 \end{frame}
 
 \begin{frame}{MDP modelling: the reward (first version)}
