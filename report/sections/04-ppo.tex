@@ -5,22 +5,22 @@
   \twocol{
     \begin{itemize}
       \item \alert{rollout buffer}: A rollout is a sequence
-      of iteractions between an agent and the environment \textbf{collected
-      under the same current policy}. It can be imagined as \textit{watching
-      the agent playing the current game} and recording what is does. 
-      Its usage is a common practice with PPO algorithms according to
-      \href{https://stable-baselines3.readthedocs.io/en/master/modules/ppo.html\#notes}{Stable-Baselines3}.
+            of iteractions between an agent and the environment \textbf{collected
+              under the same current policy}. It can be imagined as \textit{watching
+              the agent playing the current game} and recording what is does.
+            Its usage is a common practice with PPO algorithms according to
+            \href{https://stable-baselines3.readthedocs.io/en/master/modules/ppo.html\#notes}{Stable-Baselines3}.
+      \item separate \textbf{actor} and \textbf{critic} networks, separate
+            Adam optimizers.
     \end{itemize}
   }{
     \begin{itemize}
-      \item separate \textbf{actor} and \textbf{critic} networks, separate
-        Adam optimizers. 
       \item Shared CNN backbones as seen before, with the difference that the critic's value head
-        outputs a single $V(s)$.
+            outputs a single $V(s)$.
       \item independent gradient-clip norms.
       \item both the learning rate and gradient norms are parametrized as:
-      \texttt{max\_actor\_grad\_norm}, \texttt{max\_critic\_grad\_norm}, \texttt{actor\_learning\_rate},
-      \texttt{critic\_learning\_rate}.
+            \texttt{max\_actor\_grad\_norm}, \texttt{max\_critic\_grad\_norm}, \texttt{actor\_learning\_rate},
+            \texttt{critic\_learning\_rate}.
     \end{itemize}
   }
 \end{frame}
@@ -28,41 +28,41 @@
 \begin{frame}{DRL algorithms: PPO - main loops \parencite{schulman2017ppo}}
   \begin{itemize}
     \item \textbf{Rollout phase}: Inside a rollout buffer, transitions are stored for $T = $ \texttt{rollout\_buffer}
-    consectutive transitions, independently from the fact that these are transaction of the same
-    or different episodes. When we encounter the end of an episode, we continue to insert transitions
-    into the rollout unless: we arrive at $T$ or we reach the total number of episodes / \texttt{truncated} Gym signal.
+          consectutive transitions, independently from the fact that these are transaction of the same
+          or different episodes. When we encounter the end of an episode, we continue to insert transitions
+          into the rollout unless: we arrive at $T$ or we reach the total number of episodes / \texttt{truncated} Gym signal.
     \item \textbf{Learning phase}: The agent learns from the data collected during the rollout phase.
-    For each epoch, the whole content of the rollout buffer is divided in mini-batch containing
-    \texttt{batch\_size} transitions. For each of these mini-batches, the actor and critic weights
-    are updated. The whole process is repeated for $K = $ \texttt{update\_epochs}, at the end of
-    those the whole rollout buffer is emptyed.
+          For each epoch, the whole content of the rollout buffer is divided in mini-batch containing
+          \texttt{batch\_size} transitions. For each of these mini-batches, the actor and critic weights
+          are updated. The whole process is repeated for $K = $ \texttt{update\_epochs}, at the end of
+          those the whole rollout buffer is emptyed.
   \end{itemize}
 
 \end{frame}
 
 \begin{frame}{Generalized Advantage Estimation \parencite{schulman2016gae}}
   $\alert{c_t} = 0$ when \texttt{terminated}
-  or \texttt{truncated} = 1. 
+  or \texttt{truncated} = 1.
   \[
-  G_{t} := R_{t} + \gamma \alert{c_t}G_{t+1}
+    G_{t} := R_{t} + \gamma \alert{c_t}G_{t+1}
   \]
   \[
-  A_{t} := G_{t} - V(S_t)
+    A_{t} := G_{t} - V(S_t)
   \]
-   \[
-  \delta_{t}^{TD} := R_{t+1} + \gamma \alert{c_t}V(S_{t+1}) - V(S_t)
+  \[
+    \delta_{t}^{TD} := R_{t+1} + \gamma \alert{c_t}V(S_{t+1}) - V(S_t)
   \]
 
   By adding the quantity $(\gamma \alert{c_t} V(S_{t+1}) - \gamma \alert{c_t} V(S_{t+1}))$
   in the advantage equation:
   \[
-  A_{t} := R_{t} + \gamma \alert{c_t}G_{t+1} - V(S_t) + \gamma \alert{c_t} V(S_{t+1}) - \gamma \alert{c_t} V(S_{t+1})
+    A_{t} := R_{t} + \gamma \alert{c_t}G_{t+1} - V(S_t) + \gamma \alert{c_t} V(S_{t+1}) - \gamma \alert{c_t} V(S_{t+1})
   \]
   \[
-  = R_{t} + \gamma \alert{c_t} V(S_{t+1}) - V(S_t) + \gamma \alert{c_t}G_{t+1} - \gamma \alert{c_t} V(S_{t+1})
+    = R_{t} + \gamma \alert{c_t} V(S_{t+1}) - V(S_t) + \gamma \alert{c_t}G_{t+1} - \gamma \alert{c_t} V(S_{t+1})
   \]
   \[
-  A_t = \delta_{t}^{TD} + \gamma \alert{c_t}A_{t+1} \rightarrow A_t = \delta_{t}^{TD} + \gamma \lambda \alert{c_t} A_{t+1}
+    A_t = \delta_{t}^{TD} + \gamma \alert{c_t}A_{t+1} \rightarrow A_t = \delta_{t}^{TD} + \gamma \lambda \alert{c_t} A_{t+1}
   \]
   By introducing a parameter $\lambda \in [0,1) $ we can relax Monte-Carlo for a multiple step
   TD estimation of $G_t$. With $\lambda = 0 $, the advantage corresponds to TD(0), with
@@ -93,6 +93,6 @@
   \texttt{clip\_epsilon} $\epsilon$: keeps policy updates
   small on a discrete action space of size $H{\cdot}W$. \texttt{entropy\_coefficient} $\beta$: regularization parameter tuning the convergence
   to a deterministic/stochastic policy.
-  
+
 \end{frame}
 

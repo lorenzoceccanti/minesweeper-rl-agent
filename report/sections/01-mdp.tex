@@ -48,49 +48,50 @@
 
   \vspace{-0.15cm}
   \begin{itemize}
-    \item \textbf{Action space} - \texttt{gym.spaces.Discrete}. The action space on a board depends on the board $H$ and $W$. 
-    It's an integer number, between 0 and \texttt{(H $\times$ W) - 1}.
+    \item \textbf{Action space} - \texttt{gym.spaces.Discrete}. The action space on a board depends on the board $H$ and $W$.
+          It's an integer number, between 0 and \texttt{(H $\times$ W) - 1}.
     \item  Inside the \texttt{step()} method the action
-    is mapped to a board cell by doing: $i = a \operatorname{//} W,\quad j = a \bmod W$.
+          is mapped to a board cell by doing: $i = a \operatorname{//} W,\quad j = a \bmod W$.
     \item We could have chosen a \texttt{gym.spaces.MultiDiscrete} to directly represent an action as a tensor containing directly $[x y]$ coordinates,
-     but this representation adapts more to DQN, who produces as much as $Q(s,a)$ as many are the possible actions.  
+          but this representation adapts more to DQN, who produces as much as $Q(s,a)$ as many are the possible actions.
   \end{itemize}
 \end{frame}
 
 \begin{frame}{MDP modelling: the state space}
-  \textbf{State space} - \texttt{gym.spaces.Box(low=-2, high=8, shape=H$\times$W)}: The state space of the custom MDP 
+  \textbf{State space} - \texttt{gym.spaces.Box(low=-2, high=8, shape=H$\times$W)}: The state space of the custom MDP
   corresponds to what the agent actually \textit{sees} when playing.
   A cell in the \textit{player board} could be in the following states:
   \begin{itemize}
     \item $-2$: the cell is unrevealed
     \item $-1$: this is \textbf{not actually a possible state} for the agent. It's only the way in which
-    a mine is represented in the board containing the \textit{solution} of the game. The agent is informed
-    about losing a game by the \textit{terminated} boolean variable of the \textit{Gym Env}.
+          a mine is represented in the board containing the \textit{solution} of the game.\\
+          The agent is informed about losing a game by the \texttt{terminated} boolean variable of the \textit{Gym Env}.\\
+          The agent is \underline{never informed about the location of the mines}.
     \item $0...8$: a revealed safe cell. The number represents the mines around the cell.
   \end{itemize}
 \end{frame}
 
 \begin{frame}{MDP modelling: the reward (first version)}
-It's inspired by the paper \textcite{wang2025minesweepercnn}.
-\begin{table}
+  It's inspired by the paper \textcite{wang2025minesweepercnn}.
+  \begin{table}
     \centering
     \renewcommand{\arraystretch}{0.95}
     \begin{tabularx}{\textwidth}{l X r}
-      \textbf{Outcome} & \textbf{Condition} & \textbf{Reward} \\
+      \textbf{Outcome} & \textbf{Condition}                              & \textbf{Reward} \\
       \midrule
-      Win & num. safe cells \texttt{==} num uncovered cells & $+ H \cdot W $ \\
-      Loss           & mine selected                   & $- H \cdot W $ \\
-      Progress       & informed safe cell uncovered     & $+1$ \\
-      Guess          & safe cell \textit{discovered by chance}      & $-0.5$ \\
-      Already open   & already-revealed cell selected   & $-0.5$ \\
+      Win              & num. safe cells \texttt{==} num uncovered cells & $+ H \cdot W $  \\
+      Loss             & mine selected                                   & $- H \cdot W $  \\
+      Progress         & informed safe cell uncovered                    & $+1$            \\
+      Guess            & safe cell \textit{discovered by chance}         & $-0.5$          \\
+      Already open     & already-revealed cell selected                  & $-0.5$          \\
     \end{tabularx}
   \end{table}
   However, during the learning phase, this design of reward presented \textbf{some issues}:
   \begin{enumerate}
     \item The agent learned to \textbf{remain} on an \textbf{already discovered} cell for many timesteps
     \item During \textit{a progression} more than one cell could
-    be opened. However, the reward is still $+1$ \textbf{independently} on the number of the \textbf{opened cells}.
-    \item Huge boards get huge rewards, little boards get little rewards.
+          be opened. However, the reward was still $+1$ \textbf{independently} on the number of the \textbf{opened cells}.
+    \item The overall reward was dependent on the board size.
   \end{enumerate}
 \end{frame}
 
@@ -101,13 +102,13 @@ It's inspired by the paper \textcite{wang2025minesweepercnn}.
 
     \begin{tikzpicture}[xscale=0.45, yscale=0.45]
       \foreach \x in {0,...,4} {
-        \foreach \y in {0,...,4} {
-          \msc[minimum size=0.42cm]{\x}{-\y}{mshidden}{}
+          \foreach \y in {0,...,4} {
+              \msc[minimum size=0.42cm]{\x}{-\y}{mshidden}{}
+            }
         }
-      }
 
       \msc[minimum size=0.42cm,draw=badred,ultra thick]
-           {2}{-2}{mshidden}{}
+      {2}{-2}{mshidden}{}
     \end{tikzpicture}
 
   }{
@@ -153,57 +154,57 @@ It's inspired by the paper \textcite{wang2025minesweepercnn}.
 
     \end{tikzpicture}
   }
-\vspace{0.2cm}
-\begin{itemize}
-  \item Imagine selecting a cell with no mines in its neighborhood (\textit{i.e. a 0 cell}).
-  
-  According to the game rules, all the adjacent connected cells are revealed.
-  \item Instead of relying on an inefficent recursive solution, we though about a iterative solution
-  \textit{stack-based}. The coords of the cells with no mine around are pushed
-  as soon as they are found, and popped as soon as their boundaries are explored. No more pushes
-  are done with one of this conditions: a mine is found, a numbered cell is found, the cell has already
-  been uncovered by a previous visit.
-\end{itemize}
+  \vspace{0.2cm}
+  \begin{itemize}
+    \item Imagine selecting a cell with no mines in its neighborhood (\textit{i.e. a 0 cell}).
+
+          According to the game rules, all the adjacent connected cells are revealed.
+    \item Instead of relying on an inefficent recursive solution, we though about a iterative solution
+          \textit{stack-based}. The coords of the cells with no mine around are pushed
+          as soon as they are found, and popped as soon as their boundaries are explored. No more pushes
+          are done with one of this conditions: a mine is found, a numbered cell is found, the cell has already
+          been uncovered by a previous visit.
+  \end{itemize}
 \end{frame}
 
 \begin{frame}{MDP modelling: action masking + reward normalization}
   \twocol{
     \textbf{Action masking}
-      
-      To let the agent \textit{risk} more, Q-values/logits
-      are set to $-\infty$ before letting the agent perform the
-      next action.
+
+    To let the agent \textit{risk} more, Q-values/logits
+    are set to $-\infty$ before letting the agent perform the
+    next action.
   }{
     \textbf{Reward normalization}
 
     With normalization, the rewards bounds are kept under control
-    whatever is the size of the board game. 
+    whatever is the size of the board game.
   }
 
   \[
     R_t =
     \begin{cases}
-    -1
-    & \text{a mine is selected}
-    \\[0.1cm]
+      -1
+       & \text{a mine is selected}
+      \\[0.1cm]
 
-    -\dfrac{0.5}{S}
-    & \text{already unrevealed cell is selected}
-    \\[0.18cm]
+      -\dfrac{0.5}{S}
+       & \text{already unrevealed cell is selected}
+      \\[0.18cm]
 
-    \dfrac{\Delta n_t}{S}
-    & \text{uncovering } {\Delta n_t} \text{ cells } \textbf{without guessing}
-    \\[0.18cm]
+      \dfrac{\Delta n_t}{S}
+       & \text{uncovering } {\Delta n_t} \text{ cells } \textbf{without guessing}
+      \\[0.18cm]
 
-    \dfrac{\Delta n_t}{S} - \alert{\dfrac{1.5}{S}}
-    & \text{uncovering } {\Delta n_t} \text{ cells } \textbf{\alert{with a guess action}}
-    \\[0.18cm]
+      \dfrac{\Delta n_t}{S} - \alert{\dfrac{1.5}{S}}
+       & \text{uncovering } {\Delta n_t} \text{ cells } \textbf{\alert{with a guess action}}
+      \\[0.18cm]
 
-    \textcolor{goodgreen}{1} + \dfrac{\Delta n_t}{S}
-    & \text{\textcolor{goodgreen}{winning} } \textbf{without guessing}
-    \\[0.18cm]
+      \textcolor{goodgreen}{1} + \dfrac{\Delta n_t}{S}
+       & \text{\textcolor{goodgreen}{winning} } \textbf{without guessing}
+      \\[0.18cm]
 
-    \textcolor{goodgreen}{1} + \dfrac{\Delta n_t}{S} - \alert{\dfrac{1.5}{S}}
+      \textcolor{goodgreen}{1} + \dfrac{\Delta n_t}{S} - \alert{\dfrac{1.5}{S}}
        & \text{\textcolor{goodgreen}{winning} } \textbf{\alert{with a guess action}}
     \end{cases}
   \]
