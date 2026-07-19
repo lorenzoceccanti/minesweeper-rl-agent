@@ -33,7 +33,10 @@ graphify-out/
 report/build/
 report/indent.log
 /log
-/checkpoints
+checkpoints/*
+!checkpoints/*/
+checkpoints/*/*
+!checkpoints/*/best/
 /plots
 
 # Weights & Biases local run cache
