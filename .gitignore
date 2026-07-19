@@ -30,7 +30,8 @@ graphify-out/
 .graphify*
 
 # LaTeX build output (report/)
-report/build/
+report/build/*
+!report/build/slides.pdf
 report/indent.log
 /log
 checkpoints/*
