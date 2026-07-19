@@ -46,9 +46,10 @@ dqn:
     agent_seed: 42
     moving_average_window: 50
     test_output_dir: plots/test
-    save_csv: true
+    save_csv: false
     dir_csv: csv/dqn 
     name_csv: null
+    log_wandb: false
     wandb_project: minesweeper-rl
     wandb_entity: null
 
@@ -97,7 +98,7 @@ ppo:
     agent_seed: 42
     moving_average_window: 50
     test_output_dir: plots/test
-    save_csv: true
+    save_csv: false
     dir_csv: csv/ppo 
     name_csv: null
     log_wandb: false
