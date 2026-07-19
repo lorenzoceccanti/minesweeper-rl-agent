@@ -36,7 +36,7 @@ dqn:
     wandb_entity: null
     wandb_project: minesweeper-rl
   test:
-    checkpoint_path: checkpoints/dqn/best/dqn_global-skip-conv_9x9@10_seed45.pt
+    checkpoint_path: checkpoints/dqn/best/dqn_fully-conv_9x9@10_seed43.pt
     board_height: 9
     board_width: 9
     n_mines: 10
@@ -89,9 +89,9 @@ ppo:
     wandb_project: minesweeper-rl
   test:
     checkpoint_path: checkpoints/ppo/best/ppo_global-skip-conv_9x9@10_seed43.pt
-    board_height: 12
-    board_width: 12
-    n_mines: 17
+    board_height: 9
+    board_width: 9
+    n_mines: 10
     test_seed_start: 1000000
     test_seed_count: 1000
     render_mode: null
