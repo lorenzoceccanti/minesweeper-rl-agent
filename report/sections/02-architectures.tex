@@ -441,8 +441,7 @@
     {\scriptsize
         \begin{highlightbox}{Why a group norm?}
             The GN is commonly used with 4D tensors in CV, and for our purposes it allowed us
-            to maintain the independence on the size of the grid. With \texttt{num\_groups} $= 1$, the BN
-            is mathematically equivalent to a LN layer.
+            to maintain the independence on the size of the grid. With \texttt{num\_groups} $= 1$, the GN is mathematically equivalent to a LN layer.
         \end{highlightbox}
     }
 \end{frame}
@@ -520,7 +519,7 @@
             };
 
             \draw[flowarrow]
-            (gap.east) -- node[above] {$B\times F$} (ff.west);
+            (gap.east) -- node[above] {[$B, F$]} (ff.west);
 
             % Layer normalization
             \node[
@@ -531,7 +530,7 @@
             };
 
             \draw[flowarrow]
-            (ff.east) -- node[above] {$B\times G$} (ln.west);
+            (ff.east) -- node[above] {[$B, G$]} (ln.west);
 
             % Unsqueeze
             \node[
@@ -590,10 +589,7 @@
     }
     {\small
         The section of the NN producing the local features should match local patterns
-        around the cell. The global section now presented takes in input the output of the convolutional
-        backbone and should generalize the status of the entire board. A global average pooling is used,
-        preserving a $4x4$ space dimension. This is a compromise between loosing completely the spatial
-        dimension and loosing completely the independence on the board shape.
+        around the cell. The global section now presented takes in input the output of the convolutional backbone and should generalize the status of the entire board. A global average pooling is used, preserving a single scalar averaged value per channel.
     }
 \end{frame}
 
